@@ -1,4 +1,4 @@
-import type { Id, Vec2 } from '../sim/types.ts';
+import type { Id, PlayerId, Vec2 } from '../sim/types.ts';
 import { PLAYER_COLORS } from '../sim/params.ts';
 
 /** Uniform-scale camera: screen = world * s + offset. */
@@ -33,11 +33,22 @@ export interface Draft {
   end: 'head' | 'tail';
 }
 
+/** A district pair the player asked to see, from the pressure panel. */
+export interface FocusPair {
+  i: Id;
+  j: Id;
+  /** Seconds of wall clock left on the highlight; the renderer fades it out. */
+  fade: number;
+}
+
 export interface ViewState {
   cam: Camera;
   overlays: Overlays;
   hoverStation: Id | null;
   draft: Draft | null;
+  focus: FocusPair | null;
+  /** Seat this browser is playing — home markers and labels key off it. */
+  localPlayer: PlayerId;
   /** Wall-clock seconds since page load — animation only, never fed to the sim. */
   time: number;
   /** 0..1 progress between the last two sim ticks. */

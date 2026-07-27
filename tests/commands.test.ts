@@ -4,9 +4,13 @@ import { createLineCost } from '../src/sim/economy.ts';
 import { PARAMS } from '../src/sim/params.ts';
 import { createInitialState } from '../src/sim/state.ts';
 
+/** These are unit tests of one mechanism at a time, so they start from an
+ * empty map rather than the stub lines every seat opens with. */
+const BARE = { starterLines: false };
+
 describe('commands', () => {
   it('rejects a line whose stations are not joined by a corridor', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     // Westport North and Southferry are on opposite corners with no corridor.
     const v = validate(state, { type: 'CreateLine', player: 0, stations: [0, 34] });
     expect(v.ok).toBe(false);
@@ -14,12 +18,12 @@ describe('commands', () => {
   });
 
   it('rejects a line shorter than two stations', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     expect(validate(state, { type: 'CreateLine', player: 0, stations: [0] }).ok).toBe(false);
   });
 
   it('platforms are shared, so a third line cannot enter a two-platform station', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     state.players[0].cash = 1e9;
     state.players[1].cash = 1e9;
 
@@ -41,9 +45,9 @@ describe('commands', () => {
   });
 
   it('a line cannot be built without the cash for it', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     const stations = [0, 1, 12, 13];
-    state.players[0].cash = createLineCost(state, stations) - 1;
+    state.players[0].cash = createLineCost(state, 0, stations) - 1;
     const rejected = validate(state, { type: 'CreateLine', player: 0, stations });
     expect(rejected.code).toBe('insufficient_funds');
     expect(rejected.shortfall).toBeCloseTo(1, 6);
@@ -56,23 +60,23 @@ describe('commands', () => {
   });
 
   it('land value rises for both players when a district gets served', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     state.players[0].cash = 1e9;
     const before = state.landValue[0];
     applyCommand(state, { type: 'CreateLine', player: 0, stations: [0, 1] });
     // Two stations in Westport, so two steps.
     expect(state.landValue[0]).toBeCloseTo(before + 2 * PARAMS.LAND_VALUE_STEP, 6);
     // ...and the rival now pays more to build there too.
-    const nowCost = createLineCost(state, [1, 2]);
+    const nowCost = createLineCost(state, 1, [1, 2]);
     state.landValue[0] = before;
-    expect(nowCost).toBeGreaterThan(createLineCost(state, [1, 2]));
+    expect(nowCost).toBeGreaterThan(createLineCost(state, 1, [1, 2]));
   });
 
   it('closing a line refunds half of everything sunk into it', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     state.players[0].cash = 1e9;
     const stations = [0, 1, 12];
-    const cost = createLineCost(state, stations);
+    const cost = createLineCost(state, 0, stations);
     applyCommand(state, { type: 'CreateLine', player: 0, stations });
     applyCommand(state, { type: 'BuyTrain', player: 0, line: 0 });
 
@@ -84,7 +88,7 @@ describe('commands', () => {
   });
 
   it('extending puts the new station on the end that was asked for', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     state.players[0].cash = 1e9;
     applyCommand(state, { type: 'CreateLine', player: 0, stations: [1, 12] });
     applyCommand(state, { type: 'ExtendLine', player: 0, line: 0, station: 0, end: 'head' });
@@ -93,7 +97,7 @@ describe('commands', () => {
   });
 
   it('nothing can be built once the match is over', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     state.phase = 'ended';
     expect(applyCommand(state, { type: 'CreateLine', player: 0, stations: [0, 1] })).toBe(false);
   });

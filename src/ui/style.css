@@ -478,6 +478,9 @@ button.primary {
 #hud-wallet .v.neg {
   color: var(--rush);
 }
+#hud-wallet .v.dim {
+  color: var(--mute);
+}
 
 #hud-lines {
   bottom: 12px;
@@ -530,6 +533,66 @@ button.primary {
 .lineitem button:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+#hud-pressure {
+  top: 70px;
+  right: 14px;
+  width: 216px;
+  pointer-events: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  background: rgba(16, 26, 34, 0.72);
+}
+
+#hud-pressure .ph {
+  font-family: var(--cond);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--mute);
+  padding: 5px 8px 4px;
+  border-bottom: 1px solid var(--ink-3);
+}
+
+.pressure-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.pressure-row:hover,
+.pressure-row.active {
+  background: rgba(232, 237, 240, 0.06);
+  border-left-color: var(--paper);
+}
+
+.pressure-row .pair {
+  color: var(--paper);
+  font-family: var(--cond);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.pressure-row .drivers {
+  color: var(--car);
+}
+
+.pressure-row .why {
+  grid-column: 1 / -1;
+  color: var(--mute);
+}
+
+.pressure-row .why b {
+  color: var(--rush);
+  font-weight: 500;
+}
+
+#hud-pressure .empty {
+  padding: 7px 8px;
+  color: var(--mute);
 }
 
 #hud-hint {

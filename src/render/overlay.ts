@@ -1,6 +1,6 @@
 import { effectiveDemand } from '../sim/demand.ts';
 import type { GameState, Vec2 } from '../sim/types.ts';
-import { PLAYER_RGB, RGB, rgb, toScreen, type ViewState } from './view.ts';
+import { COLORS, PLAYER_RGB, RGB, rgb, toScreen, type ViewState } from './view.ts';
 
 /** F1 — segment flows: stroke width tracks passengers per minute. */
 export function drawFlowOverlay(
@@ -84,4 +84,56 @@ export function drawDesireOverlay(
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
   }
+}
+
+/**
+ * The corridor picked out in the pressure panel. Answering "where are people
+ * still driving?" is only useful if the answer lands on the map you build on,
+ * so the panel points at the ground rather than just naming it.
+ */
+export function drawFocusPair(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  view: ViewState,
+): void {
+  const focus = view.focus;
+  if (!focus || focus.fade <= 0) return;
+  const alpha = Math.min(1, focus.fade);
+  const pulse = 0.5 + 0.5 * Math.sin(view.time * 4);
+
+  for (const id of [focus.i, focus.j]) {
+    const nb = state.neighborhoods[id];
+    ctx.beginPath();
+    const p0 = toScreen(view.cam, nb.polygon[0]);
+    ctx.moveTo(p0.x, p0.y);
+    for (let k = 1; k < nb.polygon.length; k++) {
+      const p = toScreen(view.cam, nb.polygon[k]);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = rgb(RGB.paper, alpha * (0.35 + pulse * 0.4));
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  const a = toScreen(view.cam, state.neighborhoods[focus.i].centroid);
+  const b = toScreen(view.cam, state.neighborhoods[focus.j].centroid);
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.strokeStyle = rgb(RGB.paper, alpha * 0.5);
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 8]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.font = '600 12px "Barlow Condensed", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = COLORS.paper;
+  ctx.globalAlpha = alpha;
+  ctx.fillText('UNSERVED DEMAND', (a.x + b.x) / 2, (a.y + b.y) / 2 - 10);
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
 }

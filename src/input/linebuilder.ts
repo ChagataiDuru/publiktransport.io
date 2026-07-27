@@ -92,9 +92,9 @@ export function createLineBuilder(
     let cost: number;
     if (d.extending !== null) {
       cost = 0;
-      for (let i = 0; i + 1 < preview.length; i++) cost += extendLineCost(state, preview[i], preview[i + 1]);
+      for (let i = 0; i + 1 < preview.length; i++) cost += extendLineCost(state, player, preview[i], preview[i + 1]);
     } else {
-      cost = preview.length >= 2 ? createLineCost(state, preview) : 0;
+      cost = preview.length >= 2 ? createLineCost(state, player, preview) : 0;
     }
     d.cost = cost;
 

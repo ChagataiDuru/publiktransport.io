@@ -1,6 +1,7 @@
 import { PARAMS, PLAYER_COLORS } from '../sim/params.ts';
+import { topPressure } from '../sim/pressure.ts';
 import { secondsLeft } from '../sim/state.ts';
-import type { Command, GameState, PlayerId } from '../sim/types.ts';
+import type { Command, GameState, Id, PlayerId } from '../sim/types.ts';
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!;
 const money = (v: number): string =>
@@ -8,10 +9,14 @@ const money = (v: number): string =>
 
 export interface Hud {
   update(state: GameState): void;
+  /** Called when the player picks a corridor out of the pressure panel. */
+  onFocusPair(handler: (i: Id, j: Id) => void): void;
   setSessionMeta(names: string[], botSeats: number[]): void;
   showTooltip(html: string, x: number, y: number, danger?: boolean): void;
   hideTooltip(): void;
 }
+
+const PRESSURE_ROWS = 4;
 
 export function createHud(
   emit: (cmd: Command) => void,
@@ -25,6 +30,8 @@ export function createHud(
   const riders = $('riders');
   const leader = $('rivalcash');
   const lineList = $('hud-lines');
+  const pressureList = $('pressure-list');
+  const subsidy = $('subsidy');
   const standings = $('hud-standings');
   const tooltip = $('tooltip');
   const stage = $('stage');
@@ -33,6 +40,9 @@ export function createHud(
   let bots = new Set<number>();
   let listSig = '';
   let modalSig = '';
+  let pressureSig = '';
+  let focusHandler: (i: Id, j: Id) => void = () => {};
+  let activePair = '';
 
   function setSessionMeta(nextNames: string[], botSeats: number[]): void {
     names = [...nextNames];
@@ -83,16 +93,63 @@ export function createHud(
     const me = state.players[player];
     cash.textContent = money(me.cash);
     cash.classList.toggle('neg', me.cash < PARAMS.TRAIN_COST);
-    const delta = me.incomeRate - me.upkeepRate;
+    const delta = me.incomeRate + me.subsidyRate - me.upkeepRate;
     net.textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}/s`;
     net.classList.toggle('neg', delta < 0);
+    subsidy.textContent = `+${me.subsidyRate.toFixed(1)}/s`;
+    subsidy.classList.toggle('dim', me.subsidyRate < 0.05);
     riders.textContent = `${Math.round(me.lines.reduce((a, line) => a + line.ridership, 0))}/min`;
     const ranked = [...state.players].sort((a, b) => b.score - a.score);
     leader.textContent = names[ranked[0].id] || `P${ranked[0].id + 1}`;
 
     renderStandings(state, player);
     renderLineList(state, me.lines, player);
+    renderPressure(state, player);
   }
+
+  /**
+   * The one question worth asking every few seconds — where is the city still
+   * driving, and why can't it ride me? Sim-side ranking, so the bot and the
+   * player are reading the same board.
+   */
+  function renderPressure(state: GameState, player: PlayerId): void {
+    const rows = topPressure(state, player, PRESSURE_ROWS);
+    const sig = rows.map((row) => `${row.i}-${row.j}`).join('|') + activePair;
+    if (sig === pressureSig) {
+      for (const row of rows) {
+        const drivers = pressureList.querySelector<HTMLElement>(`[data-drivers="${row.i}-${row.j}"]`);
+        if (drivers) drivers.textContent = `${Math.round(row.demand * row.carShare)}/min`;
+      }
+      return;
+    }
+    pressureSig = sig;
+    if (rows.length === 0) {
+      pressureList.innerHTML = '<div class="empty">You are competitive everywhere.</div>';
+      return;
+    }
+    pressureList.innerHTML = rows
+      .map((row) => {
+        const key = `${row.i}-${row.j}`;
+        const why = Number.isFinite(row.transitSeconds)
+          ? `${Math.round(row.transitSeconds)}s by rail vs <b>${Math.round(row.carSeconds)}s</b> driving`
+          : 'no service at all';
+        return `<div class="pressure-row ${key === activePair ? 'active' : ''}" data-pair="${key}">
+            <span class="pair">${escapeHtml(shortName(state, row.i))} ↔ ${escapeHtml(shortName(state, row.j))}</span>
+            <span class="drivers" data-drivers="${key}">${Math.round(row.demand * row.carShare)}/min</span>
+            <span class="why">${why}</span>
+          </div>`;
+      })
+      .join('');
+  }
+
+  pressureList.addEventListener('click', (event) => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[data-pair]');
+    if (!row) return;
+    activePair = row.dataset.pair ?? '';
+    pressureSig = '';
+    const [i, j] = activePair.split('-').map(Number);
+    focusHandler(i, j);
+  });
 
   function renderStandings(state: GameState, player: PlayerId): void {
     standings.innerHTML = [...state.players]
@@ -185,12 +242,20 @@ export function createHud(
 
   return {
     update,
+    onFocusPair(handler) {
+      focusHandler = handler;
+    },
     setSessionMeta,
     showTooltip,
     hideTooltip() {
       tooltip.style.display = 'none';
     },
   };
+}
+
+/** District names are long; the panel is narrow. */
+function shortName(state: GameState, id: Id): string {
+  return state.neighborhoods[id].name.toUpperCase();
 }
 
 function escapeHtml(value: string): string {

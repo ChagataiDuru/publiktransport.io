@@ -12,7 +12,7 @@ afterEach(() => Object.assign(PARAMS, SNAPSHOT));
 const CORRIDOR = [0, 1, 12, 13, 15, 16];
 
 function runSolo(trains: number, seconds: number): GameState {
-  const state = createInitialState(3);
+  const state = createInitialState(3, 2, BARE);
   // Take money out of the equation: this test is about capacity, not cash.
   state.players[0].cash = 1e9;
   applyCommand(state, { type: 'CreateLine', player: 0, stations: CORRIDOR });
@@ -22,9 +22,13 @@ function runSolo(trains: number, seconds: number): GameState {
   return s;
 }
 
+/** These are unit tests of one mechanism at a time, so they start from an
+ * empty map rather than the stub lines every seat opens with. */
+const BARE = { starterLines: false };
+
 describe('crowding', () => {
   it('flow at twice capacity reads as a load factor of 2', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     applyCommand(state, { type: 'CreateLine', player: 0, stations: [0, 1, 12] });
     const line = state.players[0].lines[0];
 
@@ -37,7 +41,7 @@ describe('crowding', () => {
   });
 
   it('an uncrowded line carries no penalty', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     applyCommand(state, { type: 'CreateLine', player: 0, stations: [0, 1, 12] });
     const line = state.players[0].lines[0];
     line.segmentFlow = [lineCapacityPerHour(line) / 60 / 4];
@@ -47,7 +51,7 @@ describe('crowding', () => {
   });
 
   it('a line with no trains runs no service', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     applyCommand(state, { type: 'CreateLine', player: 0, stations: [0, 1, 12] });
     applyCommand(state, { type: 'SellTrain', player: 0, line: 0 });
     const line = state.players[0].lines[0];
@@ -67,7 +71,10 @@ describe('crowding', () => {
   });
 
   it('overcrowding drags the share back down over the following cycles', () => {
-    const state = createInitialState(5);
+    // Rush hour would surge this very corridor mid-test; this is a test of the
+    // crowding valve on its own, so hold demand still.
+    PARAMS.RUSH_MULTIPLIER = 1;
+    const state = createInitialState(5, 2, BARE);
     state.players[0].cash = 1e9;
     applyCommand(state, { type: 'CreateLine', player: 0, stations: CORRIDOR });
     for (let i = 0; i < 10; i++) applyCommand(state, { type: 'BuyTrain', player: 0, line: 0 });

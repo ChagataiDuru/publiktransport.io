@@ -185,6 +185,11 @@ if (process.env.VERBOSE === '1') {
         ` · ${result.lines} lines · ${result.stations} stations · ${result.trains} trains`,
     );
   });
+  fourBots.forEach((result, index) => {
+    console.log(
+      `four seed ${seeds[index]} shares ${result.shares.map((share) => `${(share * 100).toFixed(1)}%`).join('/')}`,
+    );
+  });
   human.forEach((result, index) => {
     console.log(
       `seed ${seeds[index]} shares ${result.shares.map((share) => `${(share * 100).toFixed(1)}%`).join('/')}` +

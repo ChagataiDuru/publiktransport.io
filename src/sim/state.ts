@@ -1,13 +1,19 @@
 import { applyCommand } from './commands.ts';
 import { assignFlows, updateLoadFactors } from './crowding.ts';
 import { buildOdMatrix, carTime, effectiveDemand } from './demand.ts';
-import { applyEconomy, pushEvent } from './economy.ts';
-import { buildEdges, buildNeighborhoods, buildStations } from './map.ts';
+import { applyEconomy, createLineCost, pushEvent } from './economy.ts';
+import {
+  HOME_SEATS,
+  buildDistrictAdjacency,
+  buildEdges,
+  buildNeighborhoods,
+  buildStations,
+} from './map.ts';
 import { logitShares, lerpSplit } from './modechoice.ts';
 import { buildRoutes } from './network.ts';
 import { PARAMS } from './params.ts';
 import { createRng, nextInt } from './rng.ts';
-import type { Command, GameState, Player, PlayerId, RouteTable } from './types.ts';
+import type { Command, GameState, Id, MapEdge, Player, PlayerId, RouteTable } from './types.ts';
 
 function emptyRoutes(n: number): RouteTable {
   return {
@@ -25,11 +31,25 @@ function makePlayer(id: PlayerId): Player {
     score: 0,
     incomeRate: 0,
     upkeepRate: 0,
+    subsidyRate: 0,
     cityShare: 0,
+    homeDistrict: HOME_SEATS[id % HOME_SEATS.length].district,
   };
 }
 
-export function createInitialState(seed: number, playerCount = 2): GameState {
+export interface InitOptions {
+  /**
+   * Every seat opens with a free two-stop stub in its home district. Tests that
+   * assert on a bare map turn this off; the game never does.
+   */
+  starterLines?: boolean;
+}
+
+export function createInitialState(
+  seed: number,
+  playerCount = 2,
+  options: InitOptions = {},
+): GameState {
   if (!Number.isInteger(playerCount) || playerCount < 2 || playerCount > 4) {
     throw new RangeError('playerCount must be an integer from 2 to 4');
   }
@@ -65,10 +85,46 @@ export function createInitialState(seed: number, playerCount = 2): GameState {
     events: [],
   };
 
+  balanceOpeningCash(state);
+  if (options.starterLines !== false) grantStarterLines(state);
   return state;
 }
 
-/** The single entry point. Mutates and returns `state` for speed. */
+/**
+ * Home districts are not equally good — Foundry's catchment is half Exchange's.
+ * A seat drawing a weaker home opens with proportionally more cash, so the
+ * draw shapes the opening without deciding the match.
+ */
+function balanceOpeningCash(state: GameState): void {
+  const adjacency = getDistrictAdjacency(state);
+  const weight = (district: Id): number => {
+    let total = state.neighborhoods[district].population;
+    for (const other of adjacency[district] ?? []) {
+      total += 0.5 * state.neighborhoods[other].population;
+    }
+    return total;
+  };
+  const weights = state.players.map((player) => weight(player.homeDistrict));
+  const mean = weights.reduce((a, b) => a + b, 0) / weights.length;
+  for (const player of state.players) {
+    const ratio = Math.pow(mean / weights[player.id], PARAMS.HOME_COMPENSATION);
+    player.cash = PARAMS.STARTING_CASH * Math.max(0.85, Math.min(1.6, ratio));
+  }
+}
+
+/**
+ * Hand each seat the stub line in its home district, free. It is granted through
+ * the ordinary command path — platform locks, land value and refunds all behave
+ * exactly as if the player had built it — the money is simply advanced first.
+ */
+function grantStarterLines(state: GameState): void {
+  for (const player of state.players) {
+    const stations = HOME_SEATS[player.id % HOME_SEATS.length].starter;
+    player.cash += createLineCost(state, player.id, stations);
+    applyCommand(state, { type: 'CreateLine', player: player.id, stations: [...stations] });
+  }
+  state.events.length = 0;
+}
 export function tick(state: GameState, commands: Command[]): GameState {
   if (state.phase === 'ended') return state;
 
@@ -116,7 +172,8 @@ function updateRushHour(state: GameState): void {
   if (rush) {
     if (!rush.active && state.tick >= rush.startsAtTick) {
       rush.active = true;
-      pushEvent(state, -1, `rush hour: ${state.neighborhoods[rush.neighborhood].name}`);
+      const also = rush.secondary >= 0 ? ` + ${state.neighborhoods[rush.secondary].name}` : '';
+      pushEvent(state, -1, `rush hour: ${state.neighborhoods[rush.neighborhood].name}${also}`);
     }
     if (state.tick >= rush.endsAtTick) {
       state.rushHour = null;
@@ -126,16 +183,54 @@ function updateRushHour(state: GameState): void {
   }
   const due = state.lastRushTick + PARAMS.RUSH_INTERVAL * hz;
   if (state.tick >= due && state.tick > 0) {
-    const nb = nextInt(state.rng, state.neighborhoods.length);
+    const nb = pickRushDistrict(state);
     const starts = state.tick + Math.round(PARAMS.RUSH_TELEGRAPH * hz);
     state.rushHour = {
       active: false,
       neighborhood: nb,
+      secondary: pickRushNeighbour(state, nb),
       telegraphedAtTick: state.tick,
       startsAtTick: starts,
       endsAtTick: starts + Math.round(PARAMS.RUSH_DURATION * hz),
     };
   }
+}
+
+const districtAdjacencyCache = new WeakMap<MapEdge[], Id[][]>();
+
+export function getDistrictAdjacency(state: GameState): Id[][] {
+  const cached = districtAdjacencyCache.get(state.edges);
+  if (cached) return cached;
+  const adj = buildDistrictAdjacency(state.stations, state.neighborhoods.length, state.edges);
+  districtAdjacencyCache.set(state.edges, adj);
+  return adj;
+}
+
+/**
+ * Rush hour lands on one of the districts still most stuck in cars, drawn at
+ * random from the worst few. Surging a district somebody already serves well
+ * just pays the leader; surging one nobody serves is an opening.
+ */
+function pickRushDistrict(state: GameState): Id {
+  const ranked = state.neighborhoods
+    .map((nb) => ({ id: nb.id, weight: nb.population * nb.share[0] }))
+    .sort((a, b) => b.weight - a.weight || a.id - b.id);
+  const pool = ranked.slice(0, Math.max(1, Math.round(PARAMS.RUSH_CANDIDATES)));
+  return pool[nextInt(state.rng, pool.length)].id;
+}
+
+/** The neighbour that trades the most trips with it, so the surge is a corridor. */
+function pickRushNeighbour(state: GameState, nb: Id): Id {
+  let best = -1;
+  let bestFlow = 0;
+  for (const other of getDistrictAdjacency(state)[nb] ?? []) {
+    const flow = state.odMatrix[nb][other] + state.odMatrix[other][nb];
+    if (flow > bestFlow) {
+      bestFlow = flow;
+      best = other;
+    }
+  }
+  return best;
 }
 
 function updateModeChoice(state: GameState): void {
@@ -249,6 +344,7 @@ export function hashState(state: GameState): string {
   for (const tick of state.botLastDecisionTick) num(tick);
   if (state.rushHour) {
     num(state.rushHour.neighborhood);
+    num(state.rushHour.secondary);
     num(state.rushHour.startsAtTick);
     num(state.rushHour.endsAtTick);
     byte(state.rushHour.active ? 1 : 0);

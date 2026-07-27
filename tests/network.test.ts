@@ -28,12 +28,16 @@ function handTime(state: GameState, opts: {
   return walkIn + opts.headway / 2 + ride + walkOut;
 }
 
+/** These are unit tests of one mechanism at a time, so they start from an
+ * empty map rather than the stub lines every seat opens with. */
+const BARE = { starterLines: false };
+
 describe('line-expanded routing', () => {
   it('matches a hand-computed single-line trip', () => {
     // Only station 1 is inside walking range of Westport, and only station 12
     // is inside walking range of Old Town — so the route is forced.
     PARAMS.MAX_WALK_TIME = 30;
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     expect(applyCommand(state, { type: 'CreateLine', player: 0, stations: [0, 1, 12] })).toBe(true);
 
     const line = state.players[0].lines[0];
@@ -59,7 +63,7 @@ describe('line-expanded routing', () => {
     // station 13 is in reach of Old Town, so changing lines at Old Town Gate
     // is the only way through.
     PARAMS.MAX_WALK_TIME = 10;
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     applyCommand(state, { type: 'CreateLine', player: 0, stations: [0, 1, 12] });
     applyCommand(state, { type: 'CreateLine', player: 0, stations: [12, 13] });
 
@@ -74,7 +78,7 @@ describe('line-expanded routing', () => {
 
   it('reports unreachable districts as Infinity', () => {
     PARAMS.MAX_WALK_TIME = 30;
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     applyCommand(state, { type: 'CreateLine', player: 0, stations: [0, 1] });
     const routes = buildRoutes(state, 0);
     // Southferry is on the far side of the map with no service at all.
@@ -82,7 +86,7 @@ describe('line-expanded routing', () => {
   });
 
   it('an express chord beats the all-stops route it flies over', () => {
-    const state = createInitialState(1);
+    const state = createInitialState(1, 2, BARE);
     // Local: Union Square -> Lantern Street -> Quayside (2 stops, one dwell more)
     applyCommand(state, { type: 'CreateLine', player: 0, stations: [15, 18, 29] });
     // Express: Union Square -> Quayside direct, using the hub-to-hub chord.

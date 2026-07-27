@@ -7,7 +7,7 @@ export const PARAMS = {
   // time
   TICK_HZ: 10,
   MATCH_SECONDS: 300,
-  DEMAND_RECALC_HZ: 1,
+  DEMAND_RECALC_HZ: 2,
 
   // speed (world units / second)
   CAR_SPEED: 55,
@@ -18,7 +18,7 @@ export const PARAMS = {
   // routing
   TRANSFER_PENALTY: 40, // seconds
   BETA: 0.012, // logit sensitivity (spec suggested 0.008 — see NOTES.md)
-  SHARE_LERP: 0.15,
+  SHARE_LERP: 0.1,
 
   // traffic
   CONGESTION_K: 1.4,
@@ -33,21 +33,32 @@ export const PARAMS = {
   // demand
   TOTAL_TRIPS_PER_MIN: 9000,
   GRAVITY_EXPONENT: 1.5,
-  RUSH_MULTIPLIER: 3.0,
-  RUSH_INTERVAL: 60,
-  RUSH_DURATION: 20,
-  RUSH_TELEGRAPH: 5,
+  RUSH_MULTIPLIER: 4.0,
+  RUSH_INTERVAL: 55,
+  RUSH_DURATION: 30,
+  RUSH_TELEGRAPH: 6,
+  /** How many of the most car-bound districts rush hour can pick from. */
+  RUSH_CANDIDATES: 5,
 
   // economy
   STARTING_CASH: 15000, // enough for an opening plus one meaningful follow-up
   FARE: 0.08, // spec: 0.06
   TRACK_COST_PER_UNIT: 3.5,
   STATION_COST: 700,
-  TRAIN_COST: 1500,
-  TRAIN_UPKEEP: 1.2, // $/second
+  TRAIN_COST: 1200,
+  TRAIN_UPKEEP: 2.6, // $/second — frequency is a running commitment, not a one-off
   TRACK_UPKEEP: 0.004, // spec: 0.02 — see NOTES.md
   LAND_VALUE_STEP: 0.15,
+  /** Land value relaxes back toward 1.0 at this fraction per second. */
+  LAND_VALUE_DECAY: 0.015,
+  /** Building in your own home district costs this multiple. */
+  HOME_DISCOUNT: 0.75,
+  /** How hard opening cash compensates a weak home district. 0 turns it off. */
+  HOME_COMPENSATION: 1.0,
   REFUND_RATE: 0.5,
+  /** $/second granted per percentage point of city share behind the leader. */
+  SUBSIDY_PER_POINT: 1.1,
+  SUBSIDY_MAX: 22,
 
   // bot
   BOT_DECISION_INTERVAL: 4,
@@ -94,6 +105,7 @@ export const PARAM_GROUPS: { label: string; keys: (keyof Params)[] }[] = [
       'RUSH_INTERVAL',
       'RUSH_DURATION',
       'RUSH_TELEGRAPH',
+      'RUSH_CANDIDATES',
     ],
   },
   {
@@ -107,7 +119,12 @@ export const PARAM_GROUPS: { label: string; keys: (keyof Params)[] }[] = [
       'TRAIN_UPKEEP',
       'TRACK_UPKEEP',
       'LAND_VALUE_STEP',
+      'LAND_VALUE_DECAY',
+      'HOME_DISCOUNT',
+      'HOME_COMPENSATION',
       'REFUND_RATE',
+      'SUBSIDY_PER_POINT',
+      'SUBSIDY_MAX',
     ],
   },
   { label: 'Bot', keys: ['BOT_DECISION_INTERVAL', 'BOT_OPENING_DELAY', 'BOT_COST_DISCOUNT'] },

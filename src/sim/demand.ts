@@ -31,10 +31,13 @@ export function buildOdMatrix(neighborhoods: Neighborhood[]): number[][] {
 export function effectiveDemand(state: GameState, i: Id, j: Id): number {
   const base = state.odMatrix[i][j];
   const rush = state.rushHour;
-  if (rush && rush.active && (rush.neighborhood === i || rush.neighborhood === j)) {
-    return base * PARAMS.RUSH_MULTIPLIER;
-  }
-  return base;
+  if (!rush || !rush.active) return base;
+  const hit =
+    rush.neighborhood === i ||
+    rush.neighborhood === j ||
+    rush.secondary === i ||
+    rush.secondary === j;
+  return hit ? base * PARAMS.RUSH_MULTIPLIER : base;
 }
 
 /** Straight-line car travel time before congestion is applied. */

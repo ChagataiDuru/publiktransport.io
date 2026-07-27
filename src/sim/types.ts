@@ -62,11 +62,17 @@ export interface Player {
   upkeepRate: number;
   /** Population share of the whole city currently riding this player. */
   cityShare: number;
+  /** Seat's opening district: cheaper to build in, and where its stub line is. */
+  homeDistrict: Id;
+  /** Public money paid to whoever is behind the leader, $/second. */
+  subsidyRate: number;
 }
 
 export interface RushHour {
   active: boolean;
   neighborhood: Id;
+  /** Rush spills into one adjacent district; -1 when the district is isolated. */
+  secondary: Id;
   /** Marker appears here, surge begins at startsAtTick. */
   telegraphedAtTick: number;
   startsAtTick: number;

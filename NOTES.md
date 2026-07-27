@@ -65,6 +65,47 @@ prices than the player, which would corrupt the shared economy.
 game; it stays because it is the fastest way to look at a specific minute of a
 match. It runs the same `step()` the main loop does, bot included.
 
+**Every seat opens with a home district and a two-stop stub line in it.**
+Nothing in the brief asks for this; §4.3 only notes that both players start
+identical. Played that way the first thirty seconds were solved — both sides
+raced the same highest-demand corridor and whoever got there first compounded
+the lead through `LAND_VALUE_STEP`. Seats now open in Old Town / Exchange /
+Quayside / Foundry (`HOME_SEATS` in `map.ts`), build there at `HOME_DISCOUNT`,
+and start with the stub already running. The stub is granted through the
+ordinary `CreateLine` path with the money advanced first, so platform locks,
+land value and the 50% refund all behave exactly as if it had been built.
+`createInitialState(seed, players, { starterLines: false })` turns it off; only
+unit tests that need a bare map use it.
+
+**Weaker homes open with more cash.** Foundry's catchment is half Exchange's, so
+a fixed `STARTING_CASH` would have made the seat draw decide the match.
+Opening cash scales with the mean-to-own ratio of home catchment (own population
+plus half of each corridor neighbour's), clamped, exponent `HOME_COMPENSATION`.
+At `1.0` a mirror bot match finishes within ~1.3 points; at `0` the seat-1
+advantage is ~3 points and a slower planner never wins. See §2.
+
+**There is a catch-up subsidy, which the brief does not have.** A trailing
+operator is paid `SUBSIDY_PER_POINT` $/s per point of city share behind the
+leader, capped at `SUBSIDY_MAX`. It is deliberately small next to a healthy fare
+box (~$180/s late game) and large next to an opening one (~$20/s), so it buys a
+comeback attempt early and nothing at all late. It never overtakes: the leader
+by definition receives zero.
+
+**Rush hour surges a district *and* its busiest neighbour**, and picks from the
+five districts with the most people still driving rather than uniformly at
+random. Surging a corridor somebody already serves well just pays the leader;
+surging one nobody serves is an opening. `RushHour.secondary` is `-1` when the
+district has no corridor neighbour.
+
+**Land value decays back toward 1.0.** Without it the first service into a
+district raised the price there permanently and the opening advantage compounded
+for the rest of the match.
+
+**The bot and the HUD read the same unmet-demand ranking** (`sim/pressure.ts`).
+It was the bot's private `rankedCarPairs`; making it a shared pure function is
+what let the "STILL DRIVING" panel exist without a second, subtly different
+implementation of the same idea.
+
 **Extra file: `src/render/view.ts`.** Camera, colour helpers and the `ViewState`
 type shared by every render module. Putting them in `renderer.ts` would have made
 every submodule import its own parent.
@@ -118,20 +159,45 @@ matches average **6.6 lines** and **22.5/36 occupied stations**. A planner makin
 the same quality of decisions only every ten seconds wins **6/10** matches
 against the bot; this is used as a difficulty signal, not a hard unit test.
 
+### Refinement pass (2026-07-27, second)
+
+Ten-seed sweep before this pass: **54.5% car**, mirror-match gap **3–6 points
+with seat 1 always ahead**, a planner deciding every 10s won **6/10**. The
+problems were the ones flagged below it: trains were effectively free, rush hour
+moved the score about two points, crowding took ~8s to be felt, and the opening
+was a race down one corridor.
+
+| Param | Before | Now | Why |
+|---|---:|---:|---|
+| `TRAIN_UPKEEP` | `1.2` | `2.6` | A train paid for its own upkeep for 20 minutes before the purchase price mattered, so over a 5-minute match frequency was a free action and both bots hoarded. |
+| `TRAIN_COST` | `1500` | `1200` | Lowered alongside the upkeep rise: buying frequency should be an easy decision to make and an expensive one to keep. |
+| `DEMAND_RECALC_HZ` | `1` | `2` | Halves the lag between a line going over capacity and the player feeling it. |
+| `SHARE_LERP` | `0.15` | `0.1` | Compensates for the doubled recalculation rate; net response is slightly faster, not twice as fast. |
+| `RUSH_MULTIPLIER` | `3.0` | `4.0` | Rush hour was worth about two points of city share. It is meant to be the comeback window. |
+| `RUSH_DURATION` | `20` | `30` | Long enough to react to rather than just survive. |
+| `RUSH_INTERVAL` | `60` | `55` | Four surges in a match instead of three. |
+| `LAND_VALUE_DECAY` | — | `0.015`/s | New. Claiming ground is a temporary moat, not a permanent tax on everyone else. |
+| `HOME_DISCOUNT` | — | `0.75` | New. Makes each seat's natural opening a different corridor. |
+| `HOME_COMPENSATION` | — | `1.0` | New. Swept over 0 / 0.6 / 1.0 / 1.6 / 2.4; the planner-win rate peaks hard at 1.0 (0, 1, **5**, 4, 0 wins out of 10). |
+| `SUBSIDY_PER_POINT` | — | `1.1` | New, capped at `SUBSIDY_MAX: 22`. |
+
+After: **51.1% car**, **6.2 lines**, **21.7/36 stations**, **12.3/14 districts**,
+mirror-match gap **~1.3 points**, planner wins **5/10**. Four bots: **39.0%
+car**, **9.9 lines**, **27.9/36 stations**, **13.0/14 districts**.
+
 **Still not right, in order of how much it bothers me:**
 
-- `CROWD_PENALTY_K: 1.8` bites hard but slowly — the 1 Hz recalculation plus
-  `SHARE_LERP: 0.15` means about eight seconds pass between a line going over
-  capacity and the player feeling it. I would try `SHARE_LERP: 0.22` for
-  crowding specifically, or run the crowding feedback at 2 Hz.
-- `RUSH_MULTIPLIER: 3.0` over `RUSH_DURATION: 20` moves the city share by
-  roughly two points. Visible, but not the "big score swing / comeback
-  mechanic" §5.7 promises. Try `4.0` and `30`, or make rush hour hit two
-  adjacent districts.
-- `TRAIN_UPKEEP: 1.2` vs `TRAIN_COST: 1500` means a train pays for its own
-  upkeep for 20 minutes before the purchase price matters. Over a 5-minute match
-  trains are effectively free once you can afford one, which is why both bots
-  end up train-hoarding. Either `TRAIN_UPKEEP: 3.0` or `TRAIN_COST: 900`.
+- **Four-seat matches are still not square.** Averaged over ten seeds the four
+  bots finish at 17.6 / 15.9 / 12.6 / 15.0 percent — a 4.9-point spread, all of
+  it against the Quayside seat, which is boxed in by the other three. I tried
+  Millbank (6.8 spread), Riverton (7.2) and pointing Quayside's stub into
+  Central (9.2); the shipped set is the flattest of the four. The honest fix is
+  a second map laid out for four, not more compensation on this one.
+- **The stubs themselves are not equally productive.** Left alone for 30
+  seconds they diverge by about 5 points of city share, which is what the
+  opening-cash compensation is paying for. Compensating on *measured stub
+  yield* rather than population would be more precise; I could not do it
+  without running the simulation inside `createInitialState`.
 - `CONGESTION_K: 1.4` clamps out at `CONGESTION_MAX: 3.0` only when everyone
   drives. In practice congestion lands around 1.6–2.0 and the self-balancing
   loop is gentler than the brief implies. It is doing its job — car share
@@ -178,19 +244,24 @@ simple and leaves the deterministic local loop untouched for offline play.
 
 ## 4. Next three features, most valuable first
 
-1. **Line-level scheduling instead of a single train count.** Right now a line is
-   one number and every train stops everywhere. Letting a player run some trains
-   as express over their own stopping pattern would turn the express chords from
-   a map feature into a decision, and it is the shortest path to the depth the
-   crowding model already supports.
-2. **A visible pressure readout for where people want to go and can't.** F2 shows
-   raw desire lines, but nothing shows *unmet* desire — the pairs with high demand
-   and terrible service. That is the single question a player asks every four
-   seconds, and it is currently answered by squinting. A ranked list of the top
-   five underserved corridors, with a click-to-preview line, would carry most of
-   the strategic load.
-3. **Asymmetric openings.** Both players start with the same $15k on the same
-   static map, so the first 30 seconds are close to solved. Giving each side a
-   different starting position, a starter line, or a district they already hold
-   would make the first decision interesting and is nearly free to build on top
-   of `createInitialState`.
+Two of the three previously listed here are now built: the unmet-demand readout
+is the **STILL DRIVING** panel (`sim/pressure.ts` + `ui/hud.ts`, click a row to
+light the corridor on the map), and asymmetric openings are the home districts
+and stub lines described in §1. What is worth doing next:
+
+1. **Line-level scheduling instead of a single train count.** Still the top of
+   the list. A line is one number and every train stops everywhere. Letting a
+   player run some trains express over their own stopping pattern would turn the
+   express chords from a map feature into a decision, and it is the shortest
+   path to the depth the crowding model already supports.
+2. **A second map, laid out for four.** The four-seat spread in §2 is a property
+   of this city: its demand mass sits in one row of three districts, so the two
+   seats flanking Central are simply better. A map with four balanced quarters
+   would fix in geometry what opening cash is currently papering over, and the
+   map data is already fully declarative in `map.ts`.
+3. **A one-minute opening tutorial that plays itself.** The stub line and the
+   reachable-stop highlight got a first-time player from "nothing happens when I
+   click" to building, but nobody is told what a load factor is or why their
+   line went red. Scripting the first sixty seconds against the existing command
+   path would cost almost nothing and is the difference between a demo and a
+   game somebody finishes.

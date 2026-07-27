@@ -36,9 +36,14 @@ LOBBY**, then share `http://YOUR_PUBLIC_IP:8080` with friends.
 
 ## Playing
 
+You start with a **home district** — outlined in your colour, cheaper to build
+in — and one short line already running in it. Extending that stub is the
+fastest first move.
+
 - **Click a station** to start a line, **click on** to add each stop. Track only
   follows the corridors already drawn on the map (the faint lines); dashed ones
-  are express chords between hubs that skip everything in between.
+  are express chords between hubs that skip everything in between. While you are
+  drawing, every stop the open end can reach is ringed.
 - **Enter** or double-click empty space confirms · **Backspace** undoes the last
   stop · **Esc** cancels. Clicking either loose end of one of your own lines
   extends it instead of starting a new one.
@@ -48,6 +53,13 @@ LOBBY**, then share `http://YOUR_PUBLIC_IP:8080` with friends.
   two-platform station, whoever they belong to. Hubs take three or four.
 - Running a line over capacity makes it look slow to passengers and they leave.
   Overexpanding without the fare box to hold it up ends in a fire sale.
+- **STILL DRIVING**, top right, ranks the corridors where the city is still in
+  its cars and tells you why you are not winning them. Click a row to light that
+  corridor up on the map.
+- Whoever is behind the leader is paid a small **subsidy** every second, shown in
+  the wallet. It is bounded, and the leader never receives it.
+- **Rush hour** surges a car-heavy district and its busiest neighbour for thirty
+  seconds. It is telegraphed first — that is the comeback window.
 
 The strip across the top is the whole city's modal share. It is the scoreboard.
 

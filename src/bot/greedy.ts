@@ -1,8 +1,8 @@
 import { areAdjacent, freePlatforms, getAdjacency, validate } from '../sim/commands.ts';
-import { carTime, effectiveDemand } from '../sim/demand.ts';
 import { createLineCost, extendLineCost } from '../sim/economy.ts';
 import { dist } from '../sim/map.ts';
 import { LIMITS, PARAMS } from '../sim/params.ts';
+import { pressureList } from '../sim/pressure.ts';
 import type { Command, GameState, Id, PlayerId } from '../sim/types.ts';
 
 /**
@@ -14,6 +14,8 @@ const MIN_USEFUL_HEADWAY = 45;
 const MAX_USEFUL_STOPS = 8;
 /** More than this turns the bot into a map-painting machine rather than a rival. */
 const MAX_STRATEGIC_LINES = 3;
+/** How much the discount on home ground is worth when ranking targets. */
+const HOME_BIAS = 1.35;
 
 /**
  * Deterministic greedy opponent — no RNG anywhere, so a seeded match replays
@@ -36,7 +38,7 @@ export function decide(state: GameState, p: PlayerId): Command[] {
 
   // 2. Otherwise chase the biggest pile of people still stuck in cars. Build
   // a second or third service before polishing the frequency of the first.
-  const targets = rankedCarPairs(state, p).slice(0, 8);
+  const targets = rankedTargets(state, p).slice(0, 8);
   if (player.lines.length < MAX_STRATEGIC_LINES) {
     for (const target of targets) {
       const create = tryCreate(state, p, target.i, target.j);
@@ -74,27 +76,17 @@ interface Pair {
 }
 
 /**
- * Every pair this player is not already serving well, ranked by how many
- * people are still driving it. Sorted deterministically so ties never depend
- * on iteration order.
+ * The shared unmet-demand ranking, tilted toward this seat's home district.
+ * Building on your own doorstep is cheaper (HOME_DISCOUNT), so the bot should
+ * want it too — otherwise all four seats converge on the same middle corridors.
  */
-function rankedCarPairs(state: GameState, p: PlayerId): Pair[] {
-  const n = state.neighborhoods.length;
-  const routes = state.routes[p];
-  const out: Pair[] = [];
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const demand = effectiveDemand(state, i, j) + effectiveDemand(state, j, i);
-      if (demand <= 0) continue;
-      const carShare = (state.odShare[i][j][0] + state.odShare[j][i][0]) / 2;
-      const ct = carTime(state, i, j, carShare);
-      const tt = Math.min(routes.time[i][j], routes.time[j][i]);
-      if (tt < ct * 1.15) continue; // already competitive here
-      out.push({ i, j, value: demand * carShare });
-    }
-  }
-  out.sort((a, b) => b.value - a.value || a.i - b.i || a.j - b.j);
-  return out;
+function rankedTargets(state: GameState, p: PlayerId): Pair[] {
+  const home = state.players[p].homeDistrict;
+  return pressureList(state, p).map((entry) => ({
+    i: entry.i,
+    j: entry.j,
+    value: entry.value * (entry.i === home || entry.j === home ? HOME_BIAS : 1),
+  })).sort((a, b) => b.value - a.value || a.i - b.i || a.j - b.j);
 }
 
 /** Cheapest usable station in a district, preferring hubs with room to spare. */
@@ -221,7 +213,7 @@ function tryExtend(state: GameState, p: PlayerId, i: Id, j: Id): Command[] {
             ok = false;
             break;
           }
-          cost += extendLineCost(state, prev, s);
+          cost += extendLineCost(state, p, prev, s);
           cmds.push({ type: 'ExtendLine', player: p, line: line.id, station: s, end });
           prev = s;
         }
@@ -255,7 +247,7 @@ function tryCreate(state: GameState, p: PlayerId, i: Id, j: Id): Command[] {
     const candidate = path.slice(0, len);
     const cmd: Command = { type: 'CreateLine', player: p, stations: candidate };
     if (!validate(state, cmd).ok) continue;
-    if (createLineCost(state, candidate) > budget) continue;
+    if (createLineCost(state, p, candidate) > budget) continue;
     chosen = candidate;
     break;
   }

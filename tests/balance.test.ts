@@ -28,7 +28,7 @@ describe('balance guardrails', () => {
     const opening = [0, 1, 12, 13, 15];
 
     expect(applyCommand(state, { type: 'CreateLine', player: 0, stations: opening })).toBe(true);
-    const extension = extendLineCost(state, 15, 16);
+    const extension = extendLineCost(state, 0, 15, 16);
 
     expect(state.players[0].cash).toBeGreaterThan(extension + PARAMS.TRAIN_COST * 2);
   });

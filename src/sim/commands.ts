@@ -61,7 +61,7 @@ export function validate(state: GameState, cmd: Command): Validation {
       for (let i = 0; i + 1 < st.length; i++) {
         if (!areAdjacent(state, st[i], st[i + 1])) return fail('no corridor between those stations');
       }
-      const cost = createLineCost(state, st);
+      const cost = createLineCost(state, cmd.player, st);
       if (player.cash < cost) return fail('not enough cash', 'insufficient_funds', cost, player.cash);
       return { ok: true, cost };
     }
@@ -76,7 +76,7 @@ export function validate(state: GameState, cmd: Command): Validation {
       }
       const anchor = cmd.end === 'head' ? line.stations[0] : line.stations[line.stations.length - 1];
       if (!areAdjacent(state, anchor, cmd.station)) return fail('no corridor from that end');
-      const cost = extendLineCost(state, anchor, cmd.station);
+      const cost = extendLineCost(state, cmd.player, anchor, cmd.station);
       if (player.cash < cost) return fail('not enough cash', 'insufficient_funds', cost, player.cash);
       return { ok: true, cost };
     }
@@ -119,7 +119,7 @@ export function applyCommand(state: GameState, cmd: Command): boolean {
 
   switch (cmd.type) {
     case 'CreateLine': {
-      const cost = createLineCost(state, cmd.stations);
+      const cost = createLineCost(state, cmd.player, cmd.stations);
       player.cash -= cost;
       const line: Line = {
         id: state.nextLineId++,
@@ -149,7 +149,7 @@ export function applyCommand(state: GameState, cmd: Command): boolean {
     case 'ExtendLine': {
       const line = findLine(state, cmd.player, cmd.line)!;
       const anchor = cmd.end === 'head' ? line.stations[0] : line.stations[line.stations.length - 1];
-      const cost = extendLineCost(state, anchor, cmd.station);
+      const cost = extendLineCost(state, cmd.player, anchor, cmd.station);
       player.cash -= cost;
       line.investment += cost;
       if (cmd.end === 'head') line.stations.unshift(cmd.station);

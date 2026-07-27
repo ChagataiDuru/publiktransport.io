@@ -31,6 +31,7 @@
           <b>1</b><span>Click a station</span>
           <b>2</b><span>Follow highlighted corridors</span>
           <b>3</b><span>Press Enter to build</span>
+          <b>4</b><span>You start with one short line — extend it</span>
         </div>
       </div>
     </section>
@@ -75,8 +76,14 @@
       <div id="hud-wallet" class="hud">
         <div class="row"><span class="k">CASH</span><span class="v" id="cash">$12,000</span></div>
         <div class="row"><span class="k">NET</span><span class="v" id="net">+0.0/s</span></div>
+        <div class="row"><span class="k">SUBSIDY</span><span class="v" id="subsidy">+0.0/s</span></div>
         <div class="row"><span class="k">RIDERS</span><span class="v" id="riders">0/min</span></div>
         <div class="row alt"><span class="k">LEADER</span><span class="v" id="rivalcash">—</span></div>
+      </div>
+
+      <div id="hud-pressure" class="hud">
+        <div class="ph">STILL DRIVING</div>
+        <div id="pressure-list"></div>
       </div>
 
       <div id="hud-lines" class="hud"></div>

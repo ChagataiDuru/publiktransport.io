@@ -2,7 +2,7 @@ import { decide } from './bot/greedy.ts';
 import { createLineBuilder } from './input/linebuilder.ts';
 import { OnlineClient } from './online/client.ts';
 import { createRenderer } from './render/renderer.ts';
-import type { Overlays } from './render/view.ts';
+import type { FocusPair, Overlays } from './render/view.ts';
 import { PARAMS, PLAYER_COLORS } from './sim/params.ts';
 import { createInitialState, tick } from './sim/state.ts';
 import type { Command, GameState, PlayerId } from './sim/types.ts';
@@ -74,6 +74,12 @@ createDevPanel(() => {
 
 const overlays: Overlays = { flow: false, desire: false, districts: false };
 let paused = true;
+/** Corridor picked out of the pressure panel, fading out on the map. */
+let focus: FocusPair | null = null;
+
+hud.onFocusPair((i, j) => {
+  focus = { i, j, fade: 8 };
+});
 
 function step(extra: Command[]): void {
   const commands = extra;
@@ -225,11 +231,18 @@ function frame(now: number): void {
     accumulator = 0;
   }
 
+  if (focus) {
+    focus.fade -= elapsed / 1000;
+    if (focus.fade <= 0) focus = null;
+  }
+
   if (gameActive) builder.refresh(state);
   renderer.draw(state, {
     overlays,
     hoverStation: builder.hoverStation,
     draft: builder.draft,
+    focus,
+    localPlayer,
     time: (now - start) / 1000,
     alpha: Math.min(1, accumulator / TICK_MS()),
     paused,

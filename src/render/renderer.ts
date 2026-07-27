@@ -2,7 +2,7 @@ import { WORLD_H, WORLD_W } from '../sim/map.ts';
 import type { GameState, Vec2 } from '../sim/types.ts';
 import { buildCorridorSlots, drawCorridors, drawDraft, drawLines, linePolyline } from './lines.ts';
 import { drawNeighborhoods } from './neighborhoods.ts';
-import { drawDesireOverlay, drawFlowOverlay } from './overlay.ts';
+import { drawDesireOverlay, drawFlowOverlay, drawFocusPair } from './overlay.ts';
 import { buildStationService, drawStations } from './stations.ts';
 import { drawTrains } from './trains.ts';
 import { COLORS, fitCamera, type Camera, type ViewState } from './view.ts';
@@ -74,6 +74,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     }
 
     drawNeighborhoods(ctx, state, view, displayShare);
+    drawFocusPair(ctx, state, view);
     drawCorridors(ctx, state, view);
     if (view.overlays.desire) drawDesireOverlay(ctx, state, view);
     drawLines(ctx, state, view, geoCache);

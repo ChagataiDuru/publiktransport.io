@@ -210,6 +210,19 @@ export function buildEdges(): MapEdge[] {
   return out;
 }
 
+/**
+ * Seat n opens in HOME_SEATS[n]: four districts arranged west / east / south /
+ * north around Central, each with a short corridor of its own to start on.
+ * Giving every seat a different first move is what stops the opening from
+ * being a race down the single best corridor — see NOTES.md §5.
+ */
+export const HOME_SEATS: { district: Id; starter: [Id, Id] }[] = [
+  { district: 5, starter: [12, 13] }, // Old Town — Old Town Gate / Cathedral
+  { district: 7, starter: [19, 20] }, // Exchange — Exchange / Mint Yard
+  { district: 11, starter: [29, 30] }, // Quayside — Quayside / Ferry Steps
+  { district: 2, starter: [6, 7] }, // Foundry — Foundry Central / Clocktower
+];
+
 export function edgeKey(a: Id, b: Id): number {
   return a < b ? a * 1000 + b : b * 1000 + a;
 }
@@ -220,6 +233,28 @@ export function buildAdjacency(stationCount: number, edges: MapEdge[]): Id[][] {
   for (const e of edges) {
     adj[e.a].push(e.b);
     adj[e.b].push(e.a);
+  }
+  for (const list of adj) list.sort((x, y) => x - y);
+  return adj;
+}
+
+/**
+ * districtId -> districts joined to it by at least one buildable corridor.
+ * Used by rush hour to spill into a neighbour rather than surging one district
+ * on its own.
+ */
+export function buildDistrictAdjacency(
+  stations: Station[],
+  neighborhoodCount: number,
+  edges: MapEdge[],
+): Id[][] {
+  const adj: Id[][] = Array.from({ length: neighborhoodCount }, () => []);
+  for (const e of edges) {
+    const a = stations[e.a].neighborhood;
+    const b = stations[e.b].neighborhood;
+    if (a === b) continue;
+    if (!adj[a].includes(b)) adj[a].push(b);
+    if (!adj[b].includes(a)) adj[b].push(a);
   }
   for (const list of adj) list.sort((x, y) => x - y);
   return adj;

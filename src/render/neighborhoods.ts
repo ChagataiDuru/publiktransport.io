@@ -46,14 +46,10 @@ export function drawNeighborhoods(
     ctx.stroke();
   }
 
-  // Rush-hour marker: telegraphed for a few seconds, then a hard pulse.
-  const rush = state.rushHour;
-  if (rush) {
-    const nb = state.neighborhoods[rush.neighborhood];
-    const c = toScreen(view.cam, nb.centroid);
-    const pulse = 0.5 + 0.5 * Math.sin(view.time * (rush.active ? 9 : 5));
-    const r = (rush.active ? 44 : 30) + pulse * 16;
-
+  // Every seat's home district, faintly outlined in its own colour, with the
+  // local player's called out by name.
+  for (const player of state.players) {
+    const nb = state.neighborhoods[player.homeDistrict];
     ctx.beginPath();
     const p0 = toScreen(view.cam, nb.polygon[0]);
     ctx.moveTo(p0.x, p0.y);
@@ -62,9 +58,40 @@ export function drawNeighborhoods(
       ctx.lineTo(p.x, p.y);
     }
     ctx.closePath();
-    ctx.strokeStyle = rgb(RGB.rush, rush.active ? 0.55 + pulse * 0.35 : 0.2 + pulse * 0.25);
-    ctx.lineWidth = rush.active ? 3 : 2;
+    ctx.strokeStyle = rgb(PLAYER_RGB[player.id], player.id === view.localPlayer ? 0.5 : 0.22);
+    ctx.lineWidth = player.id === view.localPlayer ? 2.5 : 1.5;
+    ctx.setLineDash([3, 5]);
     ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Rush-hour marker: telegraphed for a few seconds, then a hard pulse.
+  const rush = state.rushHour;
+  if (rush) {
+    const nb = state.neighborhoods[rush.neighborhood];
+    const c = toScreen(view.cam, nb.centroid);
+    const pulse = 0.5 + 0.5 * Math.sin(view.time * (rush.active ? 9 : 5));
+    const r = (rush.active ? 44 : 30) + pulse * 16;
+
+    for (const id of [rush.neighborhood, rush.secondary]) {
+      if (id < 0) continue;
+      const surge = state.neighborhoods[id];
+      ctx.beginPath();
+      const q0 = toScreen(view.cam, surge.polygon[0]);
+      ctx.moveTo(q0.x, q0.y);
+      for (let i = 1; i < surge.polygon.length; i++) {
+        const p = toScreen(view.cam, surge.polygon[i]);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath();
+      const strength = id === rush.neighborhood ? 1 : 0.6;
+      ctx.strokeStyle = rgb(
+        RGB.rush,
+        (rush.active ? 0.55 + pulse * 0.35 : 0.2 + pulse * 0.25) * strength,
+      );
+      ctx.lineWidth = (rush.active ? 3 : 2) * strength;
+      ctx.stroke();
+    }
 
     ctx.beginPath();
     ctx.arc(c.x, c.y, r * view.cam.s, 0, Math.PI * 2);
@@ -106,6 +133,14 @@ export function drawNeighborhoods(
     ctx.font = '600 12px "Barlow Condensed", sans-serif';
     ctx.fillStyle = rgb(RGB.paper, 0.34);
     ctx.fillText(nb.name.toUpperCase(), c.x, labelY);
+
+    // The home callout hangs off the district name rather than the centroid,
+    // where it would sit on top of whatever line runs through the middle.
+    if (state.players[view.localPlayer]?.homeDistrict === nb.id) {
+      ctx.font = '600 9px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = rgb(PLAYER_RGB[view.localPlayer], 0.75);
+      ctx.fillText('HOME · CHEAPER TO BUILD', c.x, labelY + 12);
+    }
 
     if (view.overlays.districts) {
       ctx.font = '400 10px "IBM Plex Mono", monospace';
