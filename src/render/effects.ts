@@ -1,4 +1,4 @@
-import { PLAYER_COLORS } from '../sim/params.ts';
+import { PARAMS, PLAYER_COLORS } from '../sim/params.ts';
 import type { GameState, Id, Vec2 } from '../sim/types.ts';
 import { toScreen, type ViewState } from './view.ts';
 
@@ -94,6 +94,26 @@ export function createEffectsController(): EffectsController {
   ): void {
     consume(state, view.time);
     const now = view.time;
+    const localBuilt = state.events.some(
+      (event) =>
+        event.player === view.localPlayer &&
+        (event.kind === 'serviceOpened' || event.kind === 'lineExtended'),
+    );
+    if (state.tick < 30 * PARAMS.TICK_HZ && !localBuilt) {
+      const starter = state.players[view.localPlayer]?.lines[0];
+      if (starter) {
+        for (const stationId of [starter.stations[0], starter.stations.at(-1)]) {
+          if (stationId === undefined) continue;
+          const center = toScreen(view.cam, state.stations[stationId].pos);
+          const pulse = 0.5 + 0.5 * Math.sin(now * 5);
+          ctx.beginPath();
+          ctx.arc(center.x, center.y, (14 + pulse * 8) * view.cam.s, 0, Math.PI * 2);
+          ctx.strokeStyle = colorWithAlpha(PLAYER_COLORS[view.localPlayer], 0.35 + pulse * 0.4);
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+    }
     for (let i = bursts.length - 1; i >= 0; i--) {
       const effect = bursts[i];
       const age = now - effect.born;
@@ -144,11 +164,23 @@ export function createEffectsController(): EffectsController {
       const line = state.players.flatMap((player) => player.lines).find((item) => item.id === pulse.lineId);
       const geo = geometry.get(pulse.lineId);
       if (!line || !geo || geo.pts.length < 2) continue;
+      let pulsePoints = geo.pts;
+      if (pulse.extensionStation !== undefined) {
+        const stationIndex = line.stations.indexOf(pulse.extensionStation);
+        if (stationIndex === 0 && geo.stationAt.length > 1) {
+          pulsePoints = geo.pts.slice(0, geo.stationAt[1] + 1);
+        } else if (stationIndex === line.stations.length - 1 && stationIndex > 0) {
+          pulsePoints = geo.pts.slice(geo.stationAt[stationIndex - 1]);
+        }
+      }
       const progress = Math.min(1, age / 1.15);
-      const segment = Math.min(geo.pts.length - 2, Math.floor(progress * (geo.pts.length - 1)));
-      const local = progress * (geo.pts.length - 1) - segment;
-      const a = geo.pts[segment];
-      const b = geo.pts[segment + 1];
+      const segment = Math.min(
+        pulsePoints.length - 2,
+        Math.floor(progress * (pulsePoints.length - 1)),
+      );
+      const local = progress * (pulsePoints.length - 1) - segment;
+      const a = pulsePoints[segment];
+      const b = pulsePoints[segment + 1];
       const point = toScreen(view.cam, {
         x: a.x + (b.x - a.x) * local,
         y: a.y + (b.y - a.y) * local,
