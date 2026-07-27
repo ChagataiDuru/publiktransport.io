@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>publiktransport.io</title>
+    <meta name="description" content="Get the city out of its cars and onto your network." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/ui/style.css" />
+  </head>
+  <body>
+    <!-- The signature element: the whole city's modal share, one strip. -->
+    <header id="modalbar">
+      <div id="modalbar-track">
+        <div class="seg seg-car" data-seg="car"><span></span></div>
+        <div class="seg seg-p1" data-seg="p1"><span></span></div>
+        <div class="seg seg-p2" data-seg="p2"><span></span></div>
+      </div>
+      <div id="modalbar-legend">
+        <span class="lg lg-car">CAR</span>
+        <span class="lg lg-p1">YOU</span>
+        <span class="lg lg-p2">RIVAL</span>
+      </div>
+    </header>
+
+    <main id="stage">
+      <canvas id="board"></canvas>
+
+      <div id="hud-clock" class="hud">
+        <div class="clock" id="clock">5:00</div>
+        <div class="sub" id="clock-sub">MATCH</div>
+      </div>
+
+      <div id="hud-wallet" class="hud">
+        <div class="row"><span class="k">CASH</span><span class="v" id="cash">$12,000</span></div>
+        <div class="row"><span class="k">NET</span><span class="v" id="net">+0.0/s</span></div>
+        <div class="row"><span class="k">RIDERS</span><span class="v" id="riders">0/min</span></div>
+        <div class="row alt"><span class="k">RIVAL</span><span class="v" id="rivalcash">$12,000</span></div>
+      </div>
+
+      <div id="hud-lines" class="hud"></div>
+
+      <div id="hud-hint" class="hud">
+        <b>Click a station</b> to start a line · click on to extend · <b>Enter</b> confirm ·
+        <b>Backspace</b> undo · <b>Esc</b> cancel · <b>F1</b> flows · <b>F2</b> desire ·
+        <b>F3</b> pause · <b>F4</b> districts
+      </div>
+
+      <div id="tooltip"></div>
+      <div id="devpanel"></div>
+      <div id="endscreen"></div>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
