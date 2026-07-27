@@ -15,7 +15,24 @@ npm install
 npm run dev      # http://localhost:5173
 npm test
 npm run build
+npm run host -- --port 8080
 ```
+
+## Online play
+
+`npm run host -- --port 8080` builds the client and starts one authoritative
+four-seat lobby on your PC. Open `http://localhost:8080`, choose **ONLINE
+LOBBY**, then share `http://YOUR_PUBLIC_IP:8080` with friends.
+
+- Forward TCP port `8080` to the hosting PC in your router and allow it through
+  the host firewall.
+- The host can start with 2–4 humans and can fill empty seats with bots.
+- A disconnected human is bot-controlled until the same browser reconnects and
+  reclaims its seat.
+- The server is intentionally a simple one-lobby, trusted-friends host: no
+  accounts, passwords, public matchmaking, TLS setup or persistent database.
+- If your ISP uses CGNAT or blocks inbound ports, direct public-IP hosting will
+  require a VPN/tunnel or a genuinely routable public address.
 
 ## Playing
 
@@ -44,16 +61,20 @@ The strip across the top is the whole city's modal share. It is the scoreboard.
 
 URL parameters: `?seed=42`, `?speed=4`, `?bot=off`, `?skip=120` (fast-forward).
 
-The **PARAMETERS** panel, top right, edits every tunable in the simulation live.
+The **PARAMETERS** panel, top right, edits every tunable in offline development.
+It is disabled during authoritative online matches.
 
 ## Layout
 
 ```
 src/sim/      pure simulation — no DOM, no Math.random, no Date.now
 src/bot/      greedy opponent, emits the same Commands a player does
+src/online/   browser WebSocket client and reconnect handling
+src/shared/   versioned client/server protocol
 src/render/   Canvas 2D
 src/ui/       plain DOM HUD
 src/input/    line drawing
+server/       authoritative Node host, lobby and static file server
 tools/        headless harnesses used for balance tuning
 ```
 

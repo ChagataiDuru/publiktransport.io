@@ -39,7 +39,7 @@ export function createLineBuilder(
   getState: () => GameState,
   getCamera: () => Camera,
   emit: (cmd: Command) => void,
-  player: PlayerId = 0,
+  getPlayer: () => PlayerId = () => 0,
 ): LineBuilder {
   const lb: LineBuilder = {
     draft: null,
@@ -64,6 +64,7 @@ export function createLineBuilder(
 
   /** Recompute candidate validity, cost and the readout rows. */
   function refresh(state: GameState): void {
+    const player = getPlayer();
     const d = lb.draft;
     if (!d) return;
     const chain = d.stations;
@@ -107,15 +108,16 @@ export function createLineBuilder(
     const districts = new Set(preview.map((s) => state.stations[s].neighborhood)).size;
 
     const affordable = state.players[player].cash >= cost;
-    d.info = [
-      `${affordable ? '' : '! '}$${Math.round(cost).toLocaleString('en-US')}`,
-      `RTT ~${Math.round(rtt)}s`,
-      `${districts} district${districts === 1 ? '' : 's'} · ${preview.length} stops`,
-    ];
+    d.cash = state.players[player].cash;
+    d.shortfall = Math.max(0, cost - d.cash);
+    d.roundTripSeconds = rtt;
+    d.districts = districts;
+    d.stops = preview.length;
     if (!affordable) d.reason = 'not enough cash';
   }
 
   function lengthOfExistingLine(state: GameState, lineId: Id): number {
+    const player = getPlayer();
     const line = state.players[player].lines.find((l) => l.id === lineId);
     return line ? line.stations.length - 1 : 0;
   }
@@ -134,6 +136,7 @@ export function createLineBuilder(
 
   function onClick(e: MouseEvent): void {
     const state = getState();
+    const player = getPlayer();
     if (state.phase !== 'playing') return;
     const p = pointer(e);
     const hit = stationAt(state, p);
@@ -174,14 +177,19 @@ export function createLineBuilder(
   }
 
   function newDraft(start: Id, extending: Id | null, end: 'head' | 'tail', cursor: Vec2): Draft {
+    const player = getPlayer();
     return {
       stations: [start],
       cursor,
       candidate: null,
       candidateValid: false,
       cost: 0,
+      cash: getState().players[player].cash,
+      shortfall: 0,
+      roundTripSeconds: 0,
+      districts: 1,
+      stops: 1,
       reason: null,
-      info: [],
       extending,
       end,
     };
@@ -195,6 +203,7 @@ export function createLineBuilder(
 
   function commit(state: GameState): void {
     const d = lb.draft;
+    const player = getPlayer();
     if (!d) {
       lb.draft = null;
       return;

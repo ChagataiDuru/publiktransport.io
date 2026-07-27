@@ -29,11 +29,16 @@ function makePlayer(id: PlayerId): Player {
   };
 }
 
-export function createInitialState(seed: number): GameState {
+export function createInitialState(seed: number, playerCount = 2): GameState {
+  if (!Number.isInteger(playerCount) || playerCount < 2 || playerCount > 4) {
+    throw new RangeError('playerCount must be an integer from 2 to 4');
+  }
   const stations = buildStations();
   const neighborhoods = buildNeighborhoods();
   const edges = buildEdges();
   const n = neighborhoods.length;
+  const emptyShare = (): number[] => [1, ...new Array<number>(playerCount).fill(0)];
+  for (const neighborhood of neighborhoods) neighborhood.share = emptyShare();
 
   const state: GameState = {
     tick: 0,
@@ -41,24 +46,22 @@ export function createInitialState(seed: number): GameState {
     rng: createRng(seed),
     matchLengthTicks: Math.round(PARAMS.MATCH_SECONDS * PARAMS.TICK_HZ),
     phase: 'playing',
-    players: [makePlayer(0), makePlayer(1)],
+    players: Array.from({ length: playerCount }, (_, id) => makePlayer(id)),
     stations,
     neighborhoods,
     edges,
     landValue: new Array<number>(n).fill(1),
     odMatrix: buildOdMatrix(neighborhoods),
-    odShare: Array.from({ length: n }, () =>
-      Array.from({ length: n }, () => [1, 0, 0] as [number, number, number]),
-    ),
+    odShare: Array.from({ length: n }, () => Array.from({ length: n }, emptyShare)),
     rushHour: null,
     lastRushTick: 0,
     platformUsage: new Array<number>(stations.length).fill(0),
-    routes: [emptyRoutes(n), emptyRoutes(n)],
-    netDirty: [true, true],
+    routes: Array.from({ length: playerCount }, () => emptyRoutes(n)),
+    netDirty: new Array<boolean>(playerCount).fill(true),
     nextLineId: 0,
     totalPopulation: neighborhoods.reduce((a, b) => a + b.population, 0),
-    cityShare: [1, 0, 0],
-    botLastDecisionTick: -1e9,
+    cityShare: emptyShare(),
+    botLastDecisionTick: new Array<number>(playerCount).fill(-1e9),
     events: [],
   };
 
@@ -76,7 +79,7 @@ export function tick(state: GameState, commands: Command[]): GameState {
 
   // 5.2 — rebuild the route tables when a network changed, so the HUD and the
   // preview react to a build on the very next frame.
-  for (let p = 0 as PlayerId; p < 2; p = (p + 1) as PlayerId) {
+  for (let p = 0; p < state.players.length; p++) {
     if (state.netDirty[p]) {
       state.routes[p] = buildRoutes(state, p);
       state.netDirty[p] = false;
@@ -89,8 +92,7 @@ export function tick(state: GameState, commands: Command[]): GameState {
   // 5.3 / 5.4 / 5.8 — the heavy cycle
   const period = Math.max(1, Math.round(PARAMS.TICK_HZ / PARAMS.DEMAND_RECALC_HZ));
   if (state.tick % period === 0) {
-    state.routes[0] = buildRoutes(state, 0);
-    state.routes[1] = buildRoutes(state, 1);
+    for (let p = 0; p < state.players.length; p++) state.routes[p] = buildRoutes(state, p);
     updateModeChoice(state);
     assignFlows(state);
     updateLoadFactors(state);
@@ -138,14 +140,12 @@ function updateRushHour(state: GameState): void {
 
 function updateModeChoice(state: GameState): void {
   const n = state.neighborhoods.length;
-  const r0 = state.routes[0];
-  const r1 = state.routes[1];
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
       if (i === j) continue;
       const share = state.odShare[i][j];
       const ct = carTime(state, i, j, share[0]);
-      const target = logitShares(ct, r0.time[i][j], r1.time[i][j]);
+      const target = logitShares(ct, ...state.routes.map((route) => route.time[i][j]));
       lerpSplit(share, target, PARAMS.SHARE_LERP);
     }
   }
@@ -154,16 +154,13 @@ function updateModeChoice(state: GameState): void {
 function updateScores(state: GameState): void {
   const n = state.neighborhoods.length;
   let cityCar = 0;
-  let city1 = 0;
-  let city2 = 0;
-  let score1 = 0;
-  let score2 = 0;
+  const city = new Array<number>(state.players.length).fill(0);
+  const scores = new Array<number>(state.players.length).fill(0);
 
   for (let i = 0; i < n; i++) {
     let w = 0;
     let car = 0;
-    let p1 = 0;
-    let p2 = 0;
+    const playerShares = new Array<number>(state.players.length).fill(0);
     for (let j = 0; j < n; j++) {
       if (i === j) continue;
       const d = effectiveDemand(state, i, j);
@@ -171,24 +168,23 @@ function updateScores(state: GameState): void {
       const s = state.odShare[i][j];
       w += d;
       car += d * s[0];
-      p1 += d * s[1];
-      p2 += d * s[2];
+      for (let p = 0; p < state.players.length; p++) playerShares[p] += d * s[p + 1];
     }
     const nb = state.neighborhoods[i];
-    if (w > 0) nb.share = [car / w, p1 / w, p2 / w];
+    if (w > 0) nb.share = [car / w, ...playerShares.map((share) => share / w)];
     cityCar += nb.population * nb.share[0];
-    city1 += nb.population * nb.share[1];
-    city2 += nb.population * nb.share[2];
-    score1 += nb.population * nb.share[1];
-    score2 += nb.population * nb.share[2];
+    for (let p = 0; p < state.players.length; p++) {
+      city[p] += nb.population * nb.share[p + 1];
+      scores[p] += nb.population * nb.share[p + 1];
+    }
   }
 
   const total = state.totalPopulation || 1;
-  state.cityShare = [cityCar / total, city1 / total, city2 / total];
-  state.players[0].score = score1;
-  state.players[1].score = score2;
-  state.players[0].cityShare = city1 / total;
-  state.players[1].cityShare = city2 / total;
+  state.cityShare = [cityCar / total, ...city.map((value) => value / total)];
+  for (let p = 0; p < state.players.length; p++) {
+    state.players[p].score = scores[p];
+    state.players[p].cityShare = city[p] / total;
+  }
 }
 
 export function secondsLeft(state: GameState): number {
@@ -228,11 +224,12 @@ export function hashState(state: GameState): string {
 
   num(state.tick);
   num(state.rng.s);
+  num(state.players.length);
   byte(state.phase === 'ended' ? 1 : 0);
   for (const v of state.landValue) num(v);
   for (const v of state.platformUsage) num(v);
-  for (const row of state.odShare) for (const s of row) { num(s[0]); num(s[1]); num(s[2]); }
-  for (const nb of state.neighborhoods) { num(nb.share[0]); num(nb.share[1]); num(nb.share[2]); }
+  for (const row of state.odShare) for (const split of row) for (const value of split) num(value);
+  for (const neighborhood of state.neighborhoods) for (const value of neighborhood.share) num(value);
   for (const p of state.players) {
     num(p.cash);
     num(p.score);
@@ -249,6 +246,7 @@ export function hashState(state: GameState): string {
       for (const f of l.segmentFlow) num(f);
     }
   }
+  for (const tick of state.botLastDecisionTick) num(tick);
   if (state.rushHour) {
     num(state.rushHour.neighborhood);
     num(state.rushHour.startsAtTick);

@@ -21,8 +21,8 @@ function run(seed: number, ticks: number): GameState {
   for (let t = 0; t < ticks; t++) {
     const cmds: Command[] = SCRIPT.filter((s) => s.atTick === t).map((s) => s.cmd);
     const interval = PARAMS.BOT_DECISION_INTERVAL * PARAMS.TICK_HZ;
-    if (state.tick - state.botLastDecisionTick >= interval) {
-      state.botLastDecisionTick = state.tick;
+    if (state.tick - state.botLastDecisionTick[1] >= interval) {
+      state.botLastDecisionTick[1] = state.tick;
       cmds.push(...decide(state, 1));
     }
     state = tick(state, cmds);

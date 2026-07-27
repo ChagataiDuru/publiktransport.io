@@ -14,18 +14,52 @@
     <link rel="stylesheet" href="/src/ui/style.css" />
   </head>
   <body>
+    <section id="menu-screen" class="app-screen show">
+      <div class="menu-card">
+        <div class="eyebrow">COMPETITIVE TRANSIT STRATEGY</div>
+        <h1>publiktransport<span>.io</span></h1>
+        <p>Build the network people choose. Claim corridors, manage crowding, and convert more of the city than your rivals.</p>
+        <label class="name-field">
+          <span>YOUR NAME</span>
+          <input id="player-name" maxlength="20" autocomplete="nickname" value="Host" />
+        </label>
+        <div class="menu-actions">
+          <button id="play-solo" class="primary">PLAY VS BOT</button>
+          <button id="play-online">ONLINE LOBBY</button>
+        </div>
+        <div class="quick-guide">
+          <b>1</b><span>Click a station</span>
+          <b>2</b><span>Follow highlighted corridors</span>
+          <b>3</b><span>Press Enter to build</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="lobby-screen" class="app-screen">
+      <div class="lobby-card">
+        <div class="lobby-head">
+          <div><span class="eyebrow">ONE MATCH · UP TO FOUR</span><h2>ONLINE LOBBY</h2></div>
+          <span id="lobby-connection" class="connection">CONNECTING</span>
+        </div>
+        <div id="lobby-seats" class="lobby-seats"></div>
+        <div class="invite-row">
+          <span id="invite-url"></span>
+          <button id="copy-invite">COPY INVITE</button>
+        </div>
+        <div class="lobby-actions">
+          <button id="lobby-back">BACK</button>
+          <button id="lobby-ready">READY</button>
+          <button id="lobby-add-bot">ADD BOT</button>
+          <button id="lobby-start" class="primary">START MATCH</button>
+        </div>
+        <p id="lobby-help">Guests ready up. The host can add bots and start with 2–4 occupied seats.</p>
+      </div>
+    </section>
+
     <!-- The signature element: the whole city's modal share, one strip. -->
     <header id="modalbar">
-      <div id="modalbar-track">
-        <div class="seg seg-car" data-seg="car"><span></span></div>
-        <div class="seg seg-p1" data-seg="p1"><span></span></div>
-        <div class="seg seg-p2" data-seg="p2"><span></span></div>
-      </div>
-      <div id="modalbar-legend">
-        <span class="lg lg-car">CAR</span>
-        <span class="lg lg-p1">YOU</span>
-        <span class="lg lg-p2">RIVAL</span>
-      </div>
+      <div id="modalbar-track"></div>
+      <div id="modalbar-legend"></div>
     </header>
 
     <main id="stage">
@@ -36,11 +70,13 @@
         <div class="sub" id="clock-sub">MATCH</div>
       </div>
 
+      <div id="hud-standings" class="hud"></div>
+
       <div id="hud-wallet" class="hud">
         <div class="row"><span class="k">CASH</span><span class="v" id="cash">$12,000</span></div>
         <div class="row"><span class="k">NET</span><span class="v" id="net">+0.0/s</span></div>
         <div class="row"><span class="k">RIDERS</span><span class="v" id="riders">0/min</span></div>
-        <div class="row alt"><span class="k">RIVAL</span><span class="v" id="rivalcash">$12,000</span></div>
+        <div class="row alt"><span class="k">LEADER</span><span class="v" id="rivalcash">—</span></div>
       </div>
 
       <div id="hud-lines" class="hud"></div>
@@ -52,6 +88,8 @@
       </div>
 
       <div id="tooltip"></div>
+      <div id="network-status"></div>
+      <div id="toast"></div>
       <div id="devpanel"></div>
       <div id="endscreen"></div>
     </main>

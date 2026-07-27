@@ -56,7 +56,7 @@ export function incomeFor(state: GameState, player: PlayerId): number {
  * hurt, otherwise there is no reason ever to stop building.
  */
 export function applyEconomy(state: GameState, dt: number): void {
-  for (let p = 0 as PlayerId; p < 2; p = (p + 1) as PlayerId) {
+  for (let p = 0; p < state.players.length; p++) {
     const player = state.players[p];
     player.incomeRate = incomeFor(state, p);
     player.upkeepRate = upkeepFor(state, p);

@@ -1,6 +1,6 @@
 import { effectiveDemand } from './demand.ts';
 import { lineCapacityPerHour } from './network.ts';
-import type { GameState, Line, PlayerId } from './types.ts';
+import type { GameState, Line } from './types.ts';
 
 /**
  * Push the chosen trips onto the line segments they actually ride, then read
@@ -22,7 +22,7 @@ export function assignFlows(state: GameState): void {
       if (i === j) continue;
       const trips = effectiveDemand(state, i, j);
       if (trips <= 0) continue;
-      for (let p = 0 as PlayerId; p < 2; p = (p + 1) as PlayerId) {
+      for (let p = 0; p < state.players.length; p++) {
         const share = state.odShare[i][j][p + 1];
         if (share <= 0) continue;
         const flow = trips * share;

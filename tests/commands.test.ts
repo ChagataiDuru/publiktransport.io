@@ -44,6 +44,9 @@ describe('commands', () => {
     const state = createInitialState(1);
     const stations = [0, 1, 12, 13];
     state.players[0].cash = createLineCost(state, stations) - 1;
+    const rejected = validate(state, { type: 'CreateLine', player: 0, stations });
+    expect(rejected.code).toBe('insufficient_funds');
+    expect(rejected.shortfall).toBeCloseTo(1, 6);
     expect(applyCommand(state, { type: 'CreateLine', player: 0, stations })).toBe(false);
     expect(state.players[0].lines).toHaveLength(0);
 

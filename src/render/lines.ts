@@ -258,24 +258,4 @@ export function drawDraft(ctx: CanvasRenderingContext2D, state: GameState, view:
     ctx.setLineDash([]);
   }
 
-  // Running readout beside the cursor: cost, round trip, districts touched.
-  if (draft.cursor) {
-    const c = toScreen(view.cam, draft.cursor);
-    const rows = draft.reason ? [draft.reason] : draft.info;
-    if (rows.length > 0) {
-      ctx.font = '500 12px "IBM Plex Mono", monospace';
-      let w = 0;
-      for (const r of rows) w = Math.max(w, ctx.measureText(r).width);
-      const bw = w + 18;
-      const bh = rows.length * 16 + 10;
-      const bx = c.x + 16;
-      const by = c.y + 12;
-      ctx.fillStyle = rgb(RGB.ink, 0.94);
-      ctx.fillRect(bx, by, bw, bh);
-      ctx.fillStyle = rgb(draft.reason ? RGB.rush : RGB.p1, 0.9);
-      ctx.fillRect(bx, by, 2, bh);
-      ctx.fillStyle = draft.reason ? rgb(RGB.rush) : rgb(RGB.paper);
-      rows.forEach((r, i) => ctx.fillText(r, bx + 9, by + 20 + i * 16));
-    }
-  }
 }

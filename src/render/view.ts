@@ -1,4 +1,5 @@
 import type { Id, Vec2 } from '../sim/types.ts';
+import { PLAYER_COLORS } from '../sim/params.ts';
 
 /** Uniform-scale camera: screen = world * s + offset. */
 export interface Camera {
@@ -21,9 +22,12 @@ export interface Draft {
   candidate: Id | null;
   candidateValid: boolean;
   cost: number;
+  cash: number;
+  shortfall: number;
+  roundTripSeconds: number;
+  districts: number;
+  stops: number;
   reason: string | null;
-  /** Cost / round-trip / districts touched, shown live next to the cursor. */
-  info: string[];
   /** Set when extending an existing line rather than creating one. */
   extending: Id | null;
   end: 'head' | 'tail';
@@ -105,3 +109,5 @@ export const RGB = {
   rush: hexToRgb(COLORS.rush),
   paper: hexToRgb(COLORS.paper),
 };
+
+export const PLAYER_RGB = PLAYER_COLORS.map(hexToRgb);

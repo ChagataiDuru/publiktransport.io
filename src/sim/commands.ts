@@ -28,15 +28,24 @@ export function findLine(state: GameState, player: PlayerId, lineId: Id): Line |
 
 export interface Validation {
   ok: boolean;
+  code?: string;
   reason?: string;
   cost?: number;
+  shortfall?: number;
 }
 
-const fail = (reason: string): Validation => ({ ok: false, reason });
+const fail = (reason: string, code = 'invalid', cost?: number, cash?: number): Validation => ({
+  ok: false,
+  code,
+  reason,
+  cost,
+  shortfall: cost === undefined || cash === undefined ? undefined : Math.max(0, cost - cash),
+});
 
 export function validate(state: GameState, cmd: Command): Validation {
   if (state.phase !== 'playing') return fail('match over');
   const player = state.players[cmd.player];
+  if (!player) return fail('unknown player', 'unknown_player');
 
   switch (cmd.type) {
     case 'CreateLine': {
@@ -53,7 +62,7 @@ export function validate(state: GameState, cmd: Command): Validation {
         if (!areAdjacent(state, st[i], st[i + 1])) return fail('no corridor between those stations');
       }
       const cost = createLineCost(state, st);
-      if (player.cash < cost) return fail('not enough cash');
+      if (player.cash < cost) return fail('not enough cash', 'insufficient_funds', cost, player.cash);
       return { ok: true, cost };
     }
 
@@ -68,7 +77,7 @@ export function validate(state: GameState, cmd: Command): Validation {
       const anchor = cmd.end === 'head' ? line.stations[0] : line.stations[line.stations.length - 1];
       if (!areAdjacent(state, anchor, cmd.station)) return fail('no corridor from that end');
       const cost = extendLineCost(state, anchor, cmd.station);
-      if (player.cash < cost) return fail('not enough cash');
+      if (player.cash < cost) return fail('not enough cash', 'insufficient_funds', cost, player.cash);
       return { ok: true, cost };
     }
 
@@ -81,7 +90,9 @@ export function validate(state: GameState, cmd: Command): Validation {
     case 'BuyTrain': {
       const line = findLine(state, cmd.player, cmd.line);
       if (!line) return fail('no such line');
-      if (player.cash < PARAMS.TRAIN_COST) return fail('not enough cash');
+      if (player.cash < PARAMS.TRAIN_COST) {
+        return fail('not enough cash', 'insufficient_funds', PARAMS.TRAIN_COST, player.cash);
+      }
       return { ok: true, cost: PARAMS.TRAIN_COST };
     }
 
@@ -95,7 +106,7 @@ export function validate(state: GameState, cmd: Command): Validation {
 }
 
 function nextColor(state: GameState, player: PlayerId): string {
-  const palette = LINE_COLORS[player];
+  const palette = LINE_COLORS[player % LINE_COLORS.length];
   const used = new Set(state.players[player].lines.map((l) => l.color));
   return palette.find((c) => !used.has(c)) ?? palette[palette.length - 1];
 }

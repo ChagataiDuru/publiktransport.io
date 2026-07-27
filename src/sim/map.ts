@@ -199,7 +199,7 @@ export function buildNeighborhoods(): Neighborhood[] {
     centroid: polygonCentroid(d.polygon),
     polygon: d.polygon.map((p) => ({ x: p.x, y: p.y })),
     population: d.population,
-    share: [1, 0, 0] as [number, number, number],
+    share: [1, 0, 0],
   }));
 }
 

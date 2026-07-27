@@ -1,30 +1,29 @@
 import { PARAMS } from './params.ts';
 
-export type Split = [number, number, number];
+export type Split = number[];
 
 /**
- * Multinomial logit over {car, p1, p2}.
+ * Multinomial logit over {car, ...players}.
  *   utility_m = -BETA * time_m
  *   share_m   = exp(utility_m) / sum_k exp(utility_k)
  * An unreachable mode passes Infinity and gets exactly zero share.
  */
-export function logitShares(carT: number, p1T: number, p2T: number): Split {
-  const t: Split = [carT, p1T, p2T];
-  const u: Split = [0, 0, 0];
+export function logitShares(...t: number[]): Split {
+  const u: Split = new Array<number>(t.length).fill(0);
   let best = -Infinity;
-  for (let m = 0; m < 3; m++) {
+  for (let m = 0; m < t.length; m++) {
     u[m] = isFinite(t[m]) ? -PARAMS.BETA * t[m] : -Infinity;
     if (u[m] > best) best = u[m];
   }
-  if (!isFinite(best)) return [1, 0, 0]; // nothing is reachable — everyone drives
+  if (!isFinite(best)) return [1, ...new Array<number>(Math.max(0, t.length - 1)).fill(0)];
   let sum = 0;
-  const e: Split = [0, 0, 0];
-  for (let m = 0; m < 3; m++) {
+  const e: Split = new Array<number>(t.length).fill(0);
+  for (let m = 0; m < t.length; m++) {
     e[m] = isFinite(u[m]) ? Math.exp(u[m] - best) : 0;
     sum += e[m];
   }
-  if (sum <= 0) return [1, 0, 0];
-  return [e[0] / sum, e[1] / sum, e[2] / sum];
+  if (sum <= 0) return [1, ...new Array<number>(Math.max(0, t.length - 1)).fill(0)];
+  return e.map((v) => v / sum);
 }
 
 /**
@@ -33,13 +32,9 @@ export function logitShares(carT: number, p1T: number, p2T: number): Split {
  * which is the most satisfying thing on screen.
  */
 export function lerpSplit(current: Split, target: Split, alpha: number): void {
-  current[0] += (target[0] - current[0]) * alpha;
-  current[1] += (target[1] - current[1]) * alpha;
-  current[2] += (target[2] - current[2]) * alpha;
-  const s = current[0] + current[1] + current[2];
+  for (let i = 0; i < current.length; i++) current[i] += (target[i] - current[i]) * alpha;
+  const s = current.reduce((a, b) => a + b, 0);
   if (s > 0) {
-    current[0] /= s;
-    current[1] /= s;
-    current[2] /= s;
+    for (let i = 0; i < current.length; i++) current[i] /= s;
   }
 }

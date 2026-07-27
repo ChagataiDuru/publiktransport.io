@@ -1,6 +1,6 @@
 import { effectiveDemand } from '../sim/demand.ts';
 import type { GameState, Vec2 } from '../sim/types.ts';
-import { RGB, rgb, toScreen, type ViewState } from './view.ts';
+import { PLAYER_RGB, RGB, rgb, toScreen, type ViewState } from './view.ts';
 
 /** F1 — segment flows: stroke width tracks passengers per minute. */
 export function drawFlowOverlay(
@@ -74,8 +74,9 @@ export function drawDesireOverlay(
     const t = p.d / max;
     // Colour by who currently owns that flow.
     const s = state.odShare[p.i][p.j];
-    const c =
-      s[1] > s[2] && s[1] > s[0] ? RGB.p1 : s[2] > s[0] ? RGB.p2 : RGB.car;
+    let winner = 0;
+    for (let mode = 1; mode < s.length; mode++) if (s[mode] > s[winner]) winner = mode;
+    const c = winner === 0 ? RGB.car : PLAYER_RGB[winner - 1];
     ctx.strokeStyle = rgb(c, 0.15 + t * 0.5);
     ctx.lineWidth = 1 + t * 7;
     ctx.beginPath();

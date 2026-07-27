@@ -1,6 +1,6 @@
-import { PARAMS } from '../sim/params.ts';
+import { PARAMS, PLAYER_COLORS } from '../sim/params.ts';
 import type { GameState } from '../sim/types.ts';
-import { COLORS, RGB, mix, rgb, toScreen, type ViewState } from './view.ts';
+import { COLORS, PLAYER_RGB, RGB, mix, rgb, toScreen, type ViewState } from './view.ts';
 
 /**
  * District polygons filled by blending the three modal-share colours.
@@ -11,16 +11,23 @@ export function drawNeighborhoods(
   ctx: CanvasRenderingContext2D,
   state: GameState,
   view: ViewState,
-  displayShare: [number, number, number][],
+  displayShare: number[][],
 ): void {
   for (const nb of state.neighborhoods) {
-    const [sc, s1, s2] = displayShare[nb.id] ?? nb.share;
+    const share = displayShare[nb.id] ?? nb.share;
+    const sc = share[0];
     const blended: [number, number, number] = [
-      RGB.car[0] * sc + RGB.p1[0] * s1 + RGB.p2[0] * s2,
-      RGB.car[1] * sc + RGB.p1[1] * s1 + RGB.p2[1] * s2,
-      RGB.car[2] * sc + RGB.p1[2] * s1 + RGB.p2[2] * s2,
+      RGB.car[0] * sc,
+      RGB.car[1] * sc,
+      RGB.car[2] * sc,
     ];
-    const transit = s1 + s2;
+    for (let p = 0; p < state.players.length; p++) {
+      const amount = share[p + 1];
+      blended[0] += PLAYER_RGB[p][0] * amount;
+      blended[1] += PLAYER_RGB[p][1] * amount;
+      blended[2] += PLAYER_RGB[p][2] * amount;
+    }
+    const transit = 1 - sc;
     const fill = mix(RGB.ink2, blended, 0.16 + 0.5 * transit);
 
     ctx.beginPath();
@@ -106,10 +113,9 @@ export function drawNeighborhoods(
       ctx.fillText(`${(nb.population / 1000).toFixed(0)}k  LV ${state.landValue[nb.id].toFixed(2)}`, c.x, c.y + 11);
       ctx.fillStyle = COLORS.car;
       ctx.fillText(`${(nb.share[0] * 100).toFixed(0)}%`, c.x - 34, c.y + 24);
-      ctx.fillStyle = COLORS.p1;
-      ctx.fillText(`${(nb.share[1] * 100).toFixed(0)}%`, c.x, c.y + 24);
-      ctx.fillStyle = COLORS.p2;
-      ctx.fillText(`${(nb.share[2] * 100).toFixed(0)}%`, c.x + 34, c.y + 24);
+      const winner = nb.share.slice(1).reduce((best, value, p, all) => (value > all[best] ? p : best), 0);
+      ctx.fillStyle = PLAYER_COLORS[winner];
+      ctx.fillText(`${(nb.share[winner + 1] * 100).toFixed(0)}% P${winner + 1}`, c.x + 30, c.y + 24);
     }
   }
   ctx.textAlign = 'left';

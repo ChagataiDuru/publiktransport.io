@@ -1,7 +1,8 @@
 import type { RngState } from './rng.ts';
 
 export type Id = number;
-export type PlayerId = 0 | 1;
+export type PlayerId = number;
+export type ModalShare = number[];
 
 export interface Vec2 {
   x: number;
@@ -13,7 +14,7 @@ export interface Station {
   name: string;
   pos: Vec2; // 1600x1000 world coordinates
   neighborhood: Id;
-  platforms: number; // 2 normal, 3-4 hub — SHARED BETWEEN BOTH PLAYERS
+  platforms: number; // 2 normal, 3-4 hub — shared between all competitors
   isHub: boolean;
 }
 
@@ -31,8 +32,8 @@ export interface Neighborhood {
   centroid: Vec2;
   polygon: Vec2[];
   population: number;
-  /** [car, p1, p2], sums to 1 */
-  share: [number, number, number];
+  /** [car, ...players], sums to 1 */
+  share: ModalShare;
 }
 
 export interface Line {
@@ -95,7 +96,7 @@ export interface GameState {
   matchLengthTicks: number;
   phase: 'playing' | 'ended';
 
-  players: [Player, Player];
+  players: Player[];
 
   // static map data (never mutated after createInitialState)
   stations: Station[];
@@ -104,23 +105,23 @@ export interface GameState {
 
   landValue: number[]; // per neighborhood multiplier, starts at 1.0
   odMatrix: number[][]; // base trips per minute, neighborhood -> neighborhood
-  /** Live per-OD-pair modal split, [car, p1, p2]. Smoothed toward the logit target. */
-  odShare: [number, number, number][][];
+  /** Live per-OD-pair modal split, [car, ...players]. */
+  odShare: ModalShare[][];
   rushHour: RushHour | null;
   lastRushTick: number;
-  /** Platforms consumed per station, shared across both players. */
+  /** Platforms consumed per station, shared across all players. */
   platformUsage: number[];
 
   /** Derived route caches, rebuilt only when a player's network changes. */
-  routes: [RouteTable, RouteTable];
-  netDirty: [boolean, boolean];
+  routes: RouteTable[];
+  netDirty: boolean[];
 
   nextLineId: number;
   totalPopulation: number;
-  /** City-wide [car, p1, p2] population split — the top bar. */
-  cityShare: [number, number, number];
+  /** City-wide [car, ...players] population split — the top bar. */
+  cityShare: ModalShare;
 
-  botLastDecisionTick: number;
+  botLastDecisionTick: number[];
   /** Rolling record of notable events for the HUD ticker. */
   events: { tick: number; text: string; player: PlayerId | -1 }[];
 }

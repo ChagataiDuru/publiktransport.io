@@ -68,10 +68,14 @@ export const LIMITS = {
   ACCESS_STATIONS: 3,
 };
 
-/** Line palette per player — warm signal yellow for P1, teal for P2. */
-export const LINE_COLORS: [string[], string[]] = [
+/** UI identity and line palettes for up to four competitors. */
+export const PLAYER_COLORS = ['#FFC53D', '#3BC4A7', '#A78BFA', '#FF7A66'] as const;
+
+export const LINE_COLORS: string[][] = [
   ['#FFC53D', '#FFA630', '#FFE066', '#F2872B', '#FFD98A', '#E0A21C'],
   ['#3BC4A7', '#2FA5D6', '#6FE3C6', '#2C8FA8', '#9BEBD8', '#1F8C77'],
+  ['#A78BFA', '#8B5CF6', '#C4B5FD', '#7C3AED', '#D8B4FE', '#9333EA'],
+  ['#FF7A66', '#FB7185', '#FDBA74', '#F97316', '#FDA4AF', '#EF4444'],
 ];
 
 /** Groups used purely to lay out the dev panel. Keys must exist in PARAMS. */

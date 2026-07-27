@@ -1,21 +1,29 @@
-import type { GameState, Line } from '../sim/types.ts';
+import { PLAYER_COLORS } from '../sim/params.ts';
+import type { GameState, Line, PlayerId } from '../sim/types.ts';
 
-const pct = (v: number): string => `${(v * 100).toFixed(1)}%`;
-const thousands = (v: number): string => `${Math.round(v / 1000).toLocaleString('en-US')}k`;
+const pct = (value: number): string => `${(value * 100).toFixed(1)}%`;
+const thousands = (value: number): string => `${Math.round(value / 1000).toLocaleString('en-US')}k`;
 
 function bestLine(state: GameState): { line: Line; owner: number } | null {
   let best: { line: Line; owner: number } | null = null;
-  for (const p of state.players) {
-    for (const l of p.lines) {
-      if (!best || l.ridership > best.line.ridership) best = { line: l, owner: p.id };
+  for (const player of state.players) {
+    for (const line of player.lines) {
+      if (!best || line.ridership > best.line.ridership) best = { line, owner: player.id };
     }
   }
   return best;
 }
 
-export function createEndScreen(): { update(state: GameState): void } {
+export function createEndScreen(
+  getPlayer: () => PlayerId,
+  getNames: () => string[],
+  onContinue: () => void,
+): { update(state: GameState): void } {
   const root = document.getElementById('endscreen')!;
   let shownAt = -1;
+  root.addEventListener('click', (event) => {
+    if ((event.target as HTMLElement).closest('[data-end-continue]')) onContinue();
+  });
 
   return {
     update(state: GameState) {
@@ -27,54 +35,57 @@ export function createEndScreen(): { update(state: GameState): void } {
       if (shownAt === state.tick) return;
       shownAt = state.tick;
 
-      const [car, s1, s2] = state.cityShare;
-      const me = state.players[0];
-      const rival = state.players[1];
-      const win = me.score > rival.score;
-      const draw = Math.abs(me.score - rival.score) < 1;
+      const local = getPlayer();
+      const names = getNames();
+      const ranking = [...state.players].sort((a, b) => b.score - a.score || a.id - b.id);
+      const rank = ranking.findIndex((player) => player.id === local) + 1;
+      const tied = ranking.length > 1 && Math.abs(ranking[0].score - ranking[1].score) < 1;
       const best = bestLine(state);
 
       root.innerHTML = `
         <div class="end-card">
-          <h1 style="color:${draw ? 'var(--paper)' : win ? 'var(--p1)' : 'var(--p2)'}">
-            ${draw ? 'DEAD HEAT' : win ? 'YOU WIN' : 'RIVAL WINS'}
+          <h1 style="color:${tied ? 'var(--paper)' : PLAYER_COLORS[ranking[0].id]}">
+            ${tied ? 'DEAD HEAT' : rank === 1 ? 'YOU WIN' : `YOU PLACE #${rank}`}
           </h1>
           <div class="sub">FINAL MODAL SHARE · ${thousands(state.totalPopulation)} RESIDENTS</div>
-
           <div class="end-bar">
-            <div style="width:${car * 100}%;background:var(--car)"></div>
-            <div style="width:${s1 * 100}%;background:var(--p1)"></div>
-            <div style="width:${s2 * 100}%;background:var(--p2)"></div>
+            ${state.cityShare
+              .map(
+                (share, mode) =>
+                  `<div style="width:${share * 100}%;background:${mode === 0 ? 'var(--car)' : PLAYER_COLORS[mode - 1]}"></div>`,
+              )
+              .join('')}
           </div>
-          <div class="end-legend">
-            <span style="color:var(--car)">CAR ${pct(car)}</span>
-            <span style="color:var(--p1)">YOU ${pct(s1)}</span>
-            <span style="color:var(--p2)">RIVAL ${pct(s2)}</span>
+          <div class="end-ranking">
+            ${ranking
+              .map(
+                (player, index) => `
+                <div class="end-rank ${player.id === local ? 'mine' : ''}">
+                  <b>${index + 1}</b>
+                  <i style="background:${PLAYER_COLORS[player.id]}"></i>
+                  <span>${escapeHtml(names[player.id] || `PLAYER ${player.id + 1}`)}</span>
+                  <em>${thousands(player.score)} · ${pct(player.cityShare)}</em>
+                  <small>${player.lines.length} lines · ${player.lines.reduce((a, line) => a + line.trains, 0)} trains</small>
+                </div>`,
+              )
+              .join('')}
           </div>
-
-          <div class="end-stats">
-            <div class="r"><span>CONVERTED</span><span style="color:var(--p1)">${thousands(me.score)}</span></div>
-            <div class="r"><span>CONVERTED</span><span style="color:var(--p2)">${thousands(rival.score)}</span></div>
-            <div class="r"><span>LINES</span><span>${me.lines.length}</span></div>
-            <div class="r"><span>LINES</span><span>${rival.lines.length}</span></div>
-            <div class="r"><span>TRAINS</span><span>${me.lines.reduce((a, l) => a + l.trains, 0)}</span></div>
-            <div class="r"><span>TRAINS</span><span>${rival.lines.reduce((a, l) => a + l.trains, 0)}</span></div>
-            <div class="r"><span>CASH</span><span>$${Math.round(me.cash).toLocaleString('en-US')}</span></div>
-            <div class="r"><span>CASH</span><span>$${Math.round(rival.cash).toLocaleString('en-US')}</span></div>
-          </div>
-
           ${
             best
-              ? `<div class="end-foot" style="letter-spacing:.12em">BEST LINE ·
-                  <b style="color:${best.line.color}">LINE ${best.line.id + 1}</b>
-                  <b>${Math.round(best.line.ridership).toLocaleString('en-US')}</b> riders/min ·
-                  ${best.line.stations.length} stops ·
-                  ${best.line.trains} trains</div>`
+              ? `<div class="end-foot">BEST LINE ·
+                  <b style="color:${best.line.color}">${escapeHtml(names[best.owner] || `P${best.owner + 1}`)} LINE ${best.line.id + 1}</b>
+                  · ${Math.round(best.line.ridership).toLocaleString('en-US')} riders/min</div>`
               : ''
           }
-          <div class="end-foot">PRESS <b>R</b> TO PLAY AGAIN</div>
+          <button class="primary end-continue" data-end-continue>RETURN TO LOBBY / PLAY AGAIN</button>
         </div>`;
       root.classList.add('show');
     },
   };
+}
+
+function escapeHtml(value: string): string {
+  const element = document.createElement('span');
+  element.textContent = value;
+  return element.innerHTML;
 }

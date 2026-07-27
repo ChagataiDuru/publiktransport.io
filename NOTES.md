@@ -72,8 +72,9 @@ every submodule import its own parent.
 **`tools/` holds two headless harnesses** (`playtest.ts`, `coverage.ts`). They are
 how the tuning below was done and they are worth keeping; they are not shipped.
 
-**Zero runtime dependencies**, as required. `typescript`, `vite` and `vitest` are
-the only devDependencies.
+**The offline build has no client runtime dependencies.** Online hosting adds
+the small Node-only `ws` dependency; browsers still use the native WebSocket
+API. `tsx` and the `ws` types are development/host tooling.
 
 ---
 
@@ -128,35 +129,28 @@ asymmetric openings in §4.3.
 
 ---
 
-## 3. Files to touch when this becomes multiplayer
+## 3. Multiplayer implementation
 
-The sim core needs no changes. `src/sim/**` is already pure: no DOM, no `window`,
-no `Math.random`, no `Date.now`, one serialisable `GameState`, one entry point.
+The multiplayer lift is now implemented as a single authoritative Node host:
 
-1. **`src/main.ts`** — the only real work. Today it owns the fixed-timestep loop,
-   drains the local command queue and calls `tick()`. It has to become: send
-   commands to the server, receive authoritative `GameState` (or tick-stamped
-   command batches), and run the same `tick()` locally for prediction.
-2. **`src/sim/state.ts`** — add `serialize` / `deserialize` around `GameState`.
-   `hashState()` is already there and is exactly the desync check you want; the
-   only non-JSON values are the `Infinity` headways and route times, which need
-   an explicit encoding.
-3. **`src/sim/commands.ts`** — commands already carry `player` and are validated
-   server-side-safe, but nothing checks that the sender *is* that player. Add an
-   authorisation argument to `applyCommand`.
-4. **`src/sim/params.ts`** — `PARAMS` is a live-mutable singleton so the dev panel
-   can edit it. On a server it must be per-match state, or clients could desync
-   the authoritative sim by editing their own copy. Either move it into
-   `GameState` or freeze it in production builds.
-5. **`src/bot/greedy.ts`** — becomes a server-side player that emits the same
-   commands over the same path. Its one piece of mutable state
-   (`state.botLastDecisionTick`) already lives in `GameState`.
-6. **`src/input/linebuilder.ts`** — the draft is local and optimistic. It needs to
-   handle a build being rejected by the server after the local preview accepted
-   it (someone else took the last platform first).
-7. **`src/ui/devpanel.ts`** — disable outside single-player.
+1. **`server/index.ts`** serves the Vite build and owns one four-seat lobby, the
+   10 Hz simulation, command authorisation, server-side bots and reconnect
+   takeover.
+2. **`src/shared/protocol.ts`** is the versioned, runtime-validated wire contract.
+   Clients never choose their trusted player id; the server attaches it from the
+   authenticated seat.
+3. **`src/sim/serialize.ts`** explicitly encodes positive and negative
+   `Infinity` for snapshots.
+4. **`src/sim/**`** now supports two through four competitors with dynamic
+   `{car, ...players}` modal shares, route tables and bot timers.
+5. **`src/online/client.ts`** stores a reconnect token, retries dropped sockets
+   and reclaims the same seat. While disconnected, the server bot controls it.
+6. **The dev panel is hidden online.** The server process is the only authority
+   mutating simulation parameters and state during a network match.
 
-Nothing in `src/render/**` changes.
+For this small trusted-friends target, clients render authoritative snapshots at
+5 Hz rather than predicting locally. That keeps command ordering and recovery
+simple and leaves the deterministic local loop untouched for offline play.
 
 ---
 
