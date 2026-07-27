@@ -39,19 +39,20 @@ export const PARAMS = {
   RUSH_TELEGRAPH: 5,
 
   // economy
-  STARTING_CASH: 14000, // spec: 12000
+  STARTING_CASH: 15000, // enough for an opening plus one meaningful follow-up
   FARE: 0.08, // spec: 0.06
-  TRACK_COST_PER_UNIT: 4.5,
-  STATION_COST: 900,
+  TRACK_COST_PER_UNIT: 3.5,
+  STATION_COST: 700,
   TRAIN_COST: 1500,
   TRAIN_UPKEEP: 1.2, // $/second
   TRACK_UPKEEP: 0.004, // spec: 0.02 — see NOTES.md
-  LAND_VALUE_STEP: 0.25,
+  LAND_VALUE_STEP: 0.15,
   REFUND_RATE: 0.5,
 
   // bot
   BOT_DECISION_INTERVAL: 4,
-  BOT_COST_DISCOUNT: 1.0,
+  BOT_OPENING_DELAY: 10,
+  BOT_COST_DISCOUNT: 1.05,
 };
 
 export type Params = typeof PARAMS;
@@ -109,6 +110,6 @@ export const PARAM_GROUPS: { label: string; keys: (keyof Params)[] }[] = [
       'REFUND_RATE',
     ],
   },
-  { label: 'Bot', keys: ['BOT_DECISION_INTERVAL', 'BOT_COST_DISCOUNT'] },
+  { label: 'Bot', keys: ['BOT_DECISION_INTERVAL', 'BOT_OPENING_DELAY', 'BOT_COST_DISCOUNT'] },
   { label: 'Match', keys: ['MATCH_SECONDS'] },
 ];

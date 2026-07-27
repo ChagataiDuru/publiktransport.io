@@ -9,9 +9,11 @@ import type { Command, GameState, Id, PlayerId } from '../sim/types.ts';
  * Below this the extra frequency buys almost no rider time back but still
  * costs full upkeep, so piling on trains stops being the best move.
  */
-const MIN_USEFUL_HEADWAY = 25;
+const MIN_USEFUL_HEADWAY = 45;
 /** Past this a line's own round-trip time hurts everyone already on it. */
 const MAX_USEFUL_STOPS = 8;
+/** More than this turns the bot into a map-painting machine rather than a rival. */
+const MAX_STRATEGIC_LINES = 3;
 
 /**
  * Deterministic greedy opponent — no RNG anywhere, so a seeded match replays
@@ -19,23 +21,33 @@ const MAX_USEFUL_STOPS = 8;
  */
 export function decide(state: GameState, p: PlayerId): Command[] {
   if (state.phase !== 'playing') return [];
+  if (state.tick < PARAMS.BOT_OPENING_DELAY * PARAMS.TICK_HZ) return [];
   const player = state.players[p];
 
-  // 1. A line running near capacity is worth more than any new track.
-  // Over capacity, more trains are mandatory. Merely busy, they are a luxury
-  // that stops paying once the wait is already short.
-  const hot = player.lines
-    .filter((l) => l.loadFactor > 1 || (l.loadFactor > 0.85 && l.headway > MIN_USEFUL_HEADWAY))
+  // 1. Only a genuinely overloaded line interrupts expansion. The old 85%
+  // threshold made the bot spend almost every dollar on trains and left the
+  // outer map idle.
+  const critical = player.lines
+    .filter((l) => l.loadFactor > 1.15)
     .sort((a, b) => b.loadFactor - a.loadFactor || a.id - b.id)[0];
-  if (hot && player.cash > PARAMS.TRAIN_COST * 2) {
-    return [{ type: 'BuyTrain', player: p, line: hot.id }];
+  if (critical && player.cash > PARAMS.TRAIN_COST * 2) {
+    return [{ type: 'BuyTrain', player: p, line: critical.id }];
   }
 
-  // 2. Otherwise chase the biggest pile of people still stuck in cars. The
-  //    single best pair is often unbuildable right now (platforms full, too
-  //    expensive, already adjacent), so walk down the ranking instead of
-  //    stalling on it.
-  for (const target of rankedCarPairs(state, p).slice(0, 8)) {
+  // 2. Otherwise chase the biggest pile of people still stuck in cars. Build
+  // a second or third service before polishing the frequency of the first.
+  const targets = rankedCarPairs(state, p).slice(0, 8);
+  if (player.lines.length < MAX_STRATEGIC_LINES) {
+    for (const target of targets) {
+      const create = tryCreate(state, p, target.i, target.j);
+      if (create.length > 0) return create;
+    }
+  }
+
+  // 3. Extend into unmet demand once a fresh route is not affordable/buildable.
+  // The best pair is often blocked by platforms or price, so walk the ranking
+  // instead of stalling on it.
+  for (const target of targets) {
     const extend = tryExtend(state, p, target.i, target.j);
     if (extend.length > 0) return extend;
 
@@ -43,7 +55,15 @@ export function decide(state: GameState, p: PlayerId): Command[] {
     if (create.length > 0) return create;
   }
 
-  // 3. Nothing affordable yet — bank the fare box.
+  // 4. Improve a merely busy service after expansion options are exhausted.
+  const busy = player.lines
+    .filter((l) => l.loadFactor > 0.85 && l.headway > MIN_USEFUL_HEADWAY)
+    .sort((a, b) => b.loadFactor - a.loadFactor || b.headway - a.headway || a.id - b.id)[0];
+  if (busy && player.cash > PARAMS.TRAIN_COST * 2) {
+    return [{ type: 'BuyTrain', player: p, line: busy.id }];
+  }
+
+  // 5. Nothing affordable yet — bank the fare box.
   return [];
 }
 

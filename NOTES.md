@@ -69,7 +69,8 @@ match. It runs the same `step()` the main loop does, bot included.
 type shared by every render module. Putting them in `renderer.ts` would have made
 every submodule import its own parent.
 
-**`tools/` holds two headless harnesses** (`playtest.ts`, `coverage.ts`). They are
+**`tools/` holds three headless harnesses** (`playtest.ts`, `coverage.ts`,
+`balance-sweep.ts`). They are
 how the tuning below was done and they are worth keeping; they are not shipped.
 
 **The offline build has no client runtime dependencies.** Online hosting adds
@@ -82,9 +83,8 @@ API. `tsx` and the `ws` types are development/host tooling.
 
 The brief calls the values in §12 starting guesses. Played at those numbers the
 match is not merely unbalanced, it is dead: both sides go bankrupt inside 60
-seconds and the modal share never moves off the car. I changed five and left
-everything else alone. **The original value is in a comment next to each one in
-`params.ts`.**
+seconds and the modal share never moves off the car. The first pass corrected
+the foundational simulation values below.
 
 | Param | Spec | Now | Why |
 |---|---|---|---|
@@ -92,8 +92,31 @@ everything else alone. **The original value is in a comment next to each one in
 | `STATION_DWELL` | `20` | `6` | 20s per stop put 240s of dwell into a 6-stop round trip, so a single-train line ran a 262s headway — an average wait longer than driving across the whole city. Nobody rode anything. |
 | `MAX_WALK_TIME` | `300` | `40` | At `WALK_SPEED: 8`, 300s is 2400 world units: every district could walk to every station on a 1600×1000 map. Coverage stopped mattering and the whole city converted uniformly no matter where you built. Every district has a station within 13s of its centroid, so 40s reaches your own district plus the near edge of a neighbour. |
 | `FARE` | `0.06` | `0.08` | Consequence of the above: with sane upkeep the fare box needed to make a well-run line clearly profitable rather than marginal. |
-| `STARTING_CASH` | `12000` | `14000` | A 5-stop opening line costs ~$11k. At $12k there is exactly one opening and no room to express a plan. |
+| `STARTING_CASH` | `12000` | `15000` | A player can now build a useful opening and still make a meaningful follow-up instead of watching the cash counter. |
 | `BETA` | `0.008` | `0.012` | At 0.008 a network six times slower than driving still held 22% share, so the difference between a good line and a bad one barely showed. 0.012 makes quality legible without making the loser's share collapse to nothing. |
+
+### Accessibility and map-fill pass (2026-07-27)
+
+Repeated 300-second matches showed a second problem: the bot spent nearly all
+of its surplus on trains, the map stopped at three total lines, and a human had
+no time to read the opening before the bot claimed the best corridor. These
+values are deliberately conservative:
+
+| Param | Before | Now | Why |
+|---|---:|---:|---|
+| `TRACK_COST_PER_UNIT` | `4.5` | `3.5` | Makes long corridors and extensions about 22% cheaper. |
+| `STATION_COST` | `900` | `700` | Keeps station-heavy routes from consuming the whole opening wallet. |
+| `LAND_VALUE_STEP` | `0.25` | `0.15` | Contested districts still get dearer, but the follower is not priced out after one line. |
+| `BOT_OPENING_DELAY` | `0` | `10s` | Gives a human time to inspect demand and start drawing before the bot acts. |
+| `BOT_COST_DISCOUNT` | `1.0` | `1.05` | The bot keeps a 5% cash buffer rather than spending at the exact affordable tick. |
+
+The greedy policy now prioritises a second or third line over extra frequency
+unless a line is genuinely overloaded. Run `npm run test:balance` to reproduce
+the ten-seed sweep. Two-player results average **4.6 lines**, **18.5/36 occupied
+stations**, **12.3/14 covered districts**, and **54.5% car share**. Four-bot
+matches average **6.6 lines** and **22.5/36 occupied stations**. A planner making
+the same quality of decisions only every ten seconds wins **6/10** matches
+against the bot; this is used as a difficulty signal, not a hard unit test.
 
 **Still not right, in order of how much it bothers me:**
 
@@ -114,10 +137,9 @@ everything else alone. **The original value is in a comment next to each one in
   loop is gentler than the brief implies. It is doing its job — car share
   stops falling around 45% — but you have to be looking for it.
 
-Measured with the current numbers, greedy bot vs greedy bot, seeds 1 / 42 / 777 /
-2024 / 99 (`npx vite-node tools/playtest.ts`): the city ends at **55–57% car**,
-first mover **23–27%**, second mover **18–20%**, with 2 lines and 12–15 trains
-against 1 line and 9–11 trains.
+Before the accessibility pass, greedy bot vs greedy bot over seeds 1 / 42 / 777 /
+2024 / 99 ended at **55–57% car**, first mover **23–27%**, second mover
+**18–20%**, with 2 lines and 12–15 trains against 1 line and 9–11 trains.
 
 That 6-point gap is not noise — **whoever builds first wins**, every seed. The
 opener claims the highest-demand corridor, and `LAND_VALUE_STEP` then makes the
@@ -167,7 +189,7 @@ simple and leaves the deterministic local loop untouched for offline play.
    seconds, and it is currently answered by squinting. A ranked list of the top
    five underserved corridors, with a click-to-preview line, would carry most of
    the strategic load.
-3. **Asymmetric openings.** Both players start with the same $14k on the same
+3. **Asymmetric openings.** Both players start with the same $15k on the same
    static map, so the first 30 seconds are close to solved. Giving each side a
    different starting position, a starter line, or a district they already hold
    would make the first decision interesting and is nearly free to build on top
