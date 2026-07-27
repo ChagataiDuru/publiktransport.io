@@ -15,6 +15,24 @@ describe('online protocol validation', () => {
         }),
       ),
     ).toMatchObject({ type: 'command', seq: 2 });
+    expect(
+      parseClientMessage(
+        JSON.stringify({
+          type: 'command',
+          seq: 3,
+          command: { type: 'DispatchRapidService', line: 4 },
+        }),
+      ),
+    ).toMatchObject({ type: 'command', seq: 3 });
+    expect(
+      parseClientMessage(
+        JSON.stringify({
+          type: 'command',
+          seq: 4,
+          command: { type: 'SetServicePlan', line: 4, servicePlan: 'express' },
+        }),
+      ),
+    ).toMatchObject({ type: 'command', seq: 4 });
   });
 
   it('rejects malformed and oversized commands', () => {
@@ -25,6 +43,15 @@ describe('online protocol validation', () => {
           type: 'command',
           seq: 1,
           command: { type: 'CreateLine', stations: new Array(15).fill(1) },
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      parseClientMessage(
+        JSON.stringify({
+          type: 'command',
+          seq: 2,
+          command: { type: 'SetServicePlan', line: 0, servicePlan: 'limited' },
         }),
       ),
     ).toBeNull();

@@ -249,19 +249,82 @@ is the **STILL DRIVING** panel (`sim/pressure.ts` + `ui/hud.ts`, click a row to
 light the corridor on the map), and asymmetric openings are the home districts
 and stub lines described in §1. What is worth doing next:
 
-1. **Line-level scheduling instead of a single train count.** Still the top of
-   the list. A line is one number and every train stops everywhere. Letting a
-   player run some trains express over their own stopping pattern would turn the
-   express chords from a map feature into a decision, and it is the shortest
-   path to the depth the crowding model already supports.
-2. **A second map, laid out for four.** The four-seat spread in §2 is a property
+1. **A second map, laid out for four.** The four-seat spread in §2 is a property
    of this city: its demand mass sits in one row of three districts, so the two
    seats flanking Central are simply better. A map with four balanced quarters
    would fix in geometry what opening cash is currently papering over, and the
    map data is already fully declarative in `map.ts`.
-3. **A one-minute opening tutorial that plays itself.** The stub line and the
-   reachable-stop highlight got a first-time player from "nothing happens when I
-   click" to building, but nobody is told what a load factor is or why their
-   line went red. Scripting the first sixty seconds against the existing command
-   path would cost almost nothing and is the difference between a demo and a
-   game somebody finishes.
+2. **A one-minute opening tutorial that plays itself.** The commissioning guide
+   and reachable-stop highlight get a first-time player from "nothing happens when I
+   click" to building, but the contextual prompts still do not teach route
+   planning or platform conflicts.
+3. **Balance and clarity passes for the new tactical systems.** Contract target
+   gain, Express stopping patterns and the last-minute multiplier now have the
+   right architecture but need observation across a wider range of human skill.
+
+---
+
+## 5. Gameplay and fun expansion (2026-07-28)
+
+### Architecture decisions
+
+- **Structured events are authoritative; effects are not.** `GameEvent` is a
+  discriminated union stored in the normal snapshot. `nextEventId` only
+  increases, while history is trimmed to 32 entries. A client initializes its
+  cursor to the newest event on a new seed/reconnect and therefore never
+  replays a whole match. Rings, rider streams, pulses and impact-card lifetime
+  use render time/local comparison state and never enter `GameState`.
+- **Contracts and the Final Mandate reuse the OD pipeline.** Corridor ranking,
+  lifecycle, baselines, progress, cash grants and mandate scheduling live in
+  `sim/gameplay.ts`. `effectiveDemand` folds their multiplier in before
+  assignment, crowding, fares and score. Rush/contract/mandate stacking is
+  capped at `MAX_DEMAND_MULTIPLIER: 6`.
+- **Rapid Dispatch is temporary capacity, not ownership.** Lines retain their
+  permanent `trains` and `investment`. `effectiveTrainCount` adds two only while
+  `dispatchEndsAtTick` is active. Upkeep and refunds continue to use permanent
+  trains, and expiration dirties the same route cache as a normal frequency
+  change.
+- **District control is derived.** No territory score was added. Frontlines rank
+  the existing neighborhood modal shares, and only the stable controlled leader
+  is retained to detect one takeover event.
+- **Express stops are deterministic.** An Express line serves both endpoints,
+  every hub and even-indexed intermediate stations. Trains still traverse every
+  physical segment, but skipped nodes are absent from access and transfer
+  tables and contribute no dwell. Switching to Express releases skipped
+  platforms; returning to Local is rejected unless each platform can be
+  reacquired. Extending recalculates the pattern and always serves the new
+  endpoint.
+- **Online snapshots still omit route caches.** The browser-side pressure panel
+  now derives its small route table when needed. Previously, dereferencing the
+  omitted cache crashed the first online snapshot and made the clock, canvas and
+  bots appear frozen.
+
+### New parameter defaults
+
+| System | Parameters |
+|---|---|
+| Contracts | first 35s; telegraph 7s; active 30s; cooldown 20s; result 5s; demand ×2; target +10 pts; minimum deadline gain +2.5 pts; reward $3,000 |
+| Demand safety | maximum combined multiplier ×6 |
+| Rapid Dispatch | +2 trains; active 15s; cooldown 40s; cost $500 |
+| Frontlines | minimum share 18%; control margin 8 pts; contested margin 8 pts |
+| Final Mandate | starts with 60s left after an 8s telegraph; demand ×2.5 |
+| Express | minimum 5 stations |
+
+### Deliberate simplifications and tuning risks
+
+- Contract contestability uses current route reachability plus remaining car
+  share and monopoly penalty. It does not estimate future construction cost or
+  prove that every player can reach the pair before the deadline.
+- The impact card attributes the two seconds after construction to that action.
+  It is honest authoritative measurement, but concurrent rush/contract/rival
+  changes can contribute to the displayed delta.
+- Rider streams use neighborhood centroids and a fixed bounded particle count,
+  not one particle per passenger or a full catchment analysis.
+- District control currently uses thresholded recomputation rather than a
+  separate multi-tick capture timer. The 8-point margin prevents most noise,
+  but close human matches should be watched for undesirable churn.
+- Express uses one automatic stopping pattern; manual stops, mixed local/express
+  fleets and schedule editing remain intentionally out of scope.
+- The HUD now carries contracts, frontlines, events, guidance and line tactics.
+  Common desktop sizes are supported, but smaller laptop widths need a future
+  responsive consolidation pass.

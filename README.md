@@ -60,6 +60,29 @@ fastest first move.
   the wallet. It is bounded, and the leader never receives it.
 - **Rush hour** surges a car-heavy district and its busiest neighbour for thirty
   seconds. It is telegraphed first — that is the comeback window.
+- Opening or extending service now commissions it visibly: stations radiate,
+  the track receives a travelling pulse, nearby riders stream toward the new
+  stop, and a short card reports the measured ridership, modal-share and net
+  income change two simulation seconds later.
+- **Civic Contracts** announce a shared corridor after the opening. Once active,
+  every operator races to gain 10 modal-share points there. The first to the
+  target—or the best qualifying gain at the deadline—wins a **$3,000 grant**.
+  Contract demand goes through the normal routing, crowding and fare systems.
+- Use **⚡ Rapid Dispatch** on an owned line to add two temporary trains for 15
+  seconds. It costs $500 and has a 40-second cooldown per operator. The extra
+  trains improve real headway and capacity but never count as permanent
+  investment or resale value.
+- **FRONTLINES** calls out controlled and contested districts using the existing
+  modal shares. Dashed borders mark close fights; takeover messages appear in
+  the event feed.
+- The last 68 seconds announce and then activate one **FINAL MANDATE** corridor.
+  Its demand remains elevated through the finish, normal contract scheduling
+  stops, and the final choice between capacity, coverage and speed matters.
+- Lines with at least five stations gain a **LOC / EXP** toggle. Express calls at
+  endpoints, hubs and every second intermediate station. Skipped stops are
+  hollow, lose their platform allocation, and cannot board, alight or transfer;
+  trains still pass through them. Switching back to Local requires a free
+  platform at every restored stop.
 
 The strip across the top is the whole city's modal share. It is the scoreboard.
 
@@ -70,6 +93,9 @@ The strip across the top is the whole city's modal share. It is the scoreboard.
 | `F3` | pause |
 | `F4` | district numbers |
 | `R` | restart |
+
+Line-list controls: `− / +` sell or buy a permanent train, `⚡` activates Rapid
+Dispatch, `LOC / EXP` changes the service plan, and `×` closes the line.
 
 URL parameters: `?seed=42`, `?speed=4`, `?bot=off`, `?skip=120` (fast-forward).
 
@@ -93,5 +119,11 @@ tools/        headless harnesses used for balance tuning
 `src/sim/` has one entry point, `tick(state, commands)`, and one serialisable
 `GameState`. It is written to be lifted onto a Node server unchanged — see
 `NOTES.md` §3 for what would have to move.
+
+Gameplay-changing contracts, dispatch, district control, mandates and service
+plans live in that deterministic state. Commissioning particles and impact
+animation timing are client-only. Structured simulation events have monotonic
+IDs, so clients process effects once and reconnecting clients can start at the
+newest retained event rather than replaying the match.
 
 Build notes, tuning history and known balance problems: **[NOTES.md](NOTES.md)**.
