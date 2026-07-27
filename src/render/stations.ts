@@ -1,4 +1,5 @@
 import type { GameState, Id, Line, Vec2 } from '../sim/types.ts';
+import { lineServesStation } from '../sim/network.ts';
 import { RGB, rgb, toScreen, type ViewState } from './view.ts';
 
 export interface StationService {
@@ -73,6 +74,7 @@ export function drawStations(
     const c = toScreen(view.cam, st.pos);
     const svc = service.get(st.id);
     const served = svc ? svc.lines.length : 0;
+    const passedOnly = Boolean(svc && svc.lines.every((line) => !lineServesStation(line, st.id, state.stations)));
     const r = (st.isHub ? 10 : 7) * s;
 
     if (served >= 2 && svc?.tangent) {
@@ -85,11 +87,16 @@ export function drawStations(
     } else {
       ctx.beginPath();
       ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = served > 0 ? rgb(RGB.ink) : rgb(RGB.ink2);
+      ctx.fillStyle = served > 0 && !passedOnly ? rgb(RGB.ink) : rgb(RGB.ink2);
       ctx.fill();
-      ctx.strokeStyle = rgb(RGB.paper, served > 0 ? 0.95 : st.isHub ? 0.5 : 0.32);
+      ctx.strokeStyle = rgb(
+        RGB.paper,
+        passedOnly ? 0.42 : served > 0 ? 0.95 : st.isHub ? 0.5 : 0.32,
+      );
+      if (passedOnly) ctx.setLineDash([2, 3]);
       ctx.lineWidth = st.isHub ? 2.4 : 1.7;
       ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     // Platform pips.

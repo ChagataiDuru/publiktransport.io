@@ -9,14 +9,39 @@ export function updateLineDerived(stations: Station[], line: Line): void {
     length += dist(stations[line.stations[i]].pos, stations[line.stations[i + 1]].pos);
   }
   line.trackLength = length;
-  const runTime = length / PARAMS.TRAIN_SPEED + line.stations.length * PARAMS.STATION_DWELL;
+  const servedStops =
+    line.servicePlan === 'express'
+      ? getServiceStops(line, stations).length
+      : line.stations.length;
+  const runTime = length / PARAMS.TRAIN_SPEED + servedStops * PARAMS.STATION_DWELL;
   line.roundTripTime = Math.max(1, 2 * runTime);
   // A line with no trains runs no service at all rather than an infinitely
   // fast one — buying a train back revives it.
-  line.headway = line.trains > 0 ? line.roundTripTime / line.trains : Infinity;
+  const trains = effectiveTrainCount(line);
+  line.headway = trains > 0 ? line.roundTripTime / trains : Infinity;
   if (line.segmentFlow.length !== Math.max(0, line.stations.length - 1)) {
     line.segmentFlow = new Array<number>(Math.max(0, line.stations.length - 1)).fill(0);
   }
+}
+
+export function effectiveTrainCount(line: Line): number {
+  return line.trains + (line.dispatchEndsAtTick > 0 ? PARAMS.RAPID_DISPATCH_EXTRA_TRAINS : 0);
+}
+
+/** Endpoints, hubs and alternating intermediate stops form a stable express pattern. */
+export function getServiceStops(line: Line, stations: Station[]): Id[] {
+  if (line.servicePlan === 'local') return [...line.stations];
+  return line.stations.filter(
+    (stationId, index) =>
+      index === 0 ||
+      index === line.stations.length - 1 ||
+      stations[stationId].isHub ||
+      index % 2 === 0,
+  );
+}
+
+export function lineServesStation(line: Line, station: Id, stations: Station[]): boolean {
+  return getServiceStops(line, stations).includes(station);
 }
 
 /**
@@ -30,8 +55,9 @@ export function crowdPenalty(line: Line): number {
 }
 
 export function lineCapacityPerHour(line: Line): number {
-  if (line.trains <= 0 || line.roundTripTime <= 0) return 0;
-  return line.trains * PARAMS.TRAIN_CAPACITY * (3600 / line.roundTripTime);
+  const trains = effectiveTrainCount(line);
+  if (trains <= 0 || line.roundTripTime <= 0) return 0;
+  return trains * PARAMS.TRAIN_CAPACITY * (3600 / line.roundTripTime);
 }
 
 // ---------------------------------------------------------------------------
@@ -156,12 +182,13 @@ function expand(state: GameState, lines: Line[]): Expanded {
   };
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
+    const served = new Set(getServiceStops(line, state.stations));
     for (let p = 0; p < line.stations.length; p++) {
       const id = g.count++;
       g.station.push(line.stations[p]);
       g.lineIdx.push(li);
       g.pos.push(p);
-      g.atStation[line.stations[p]].push(id);
+      if (served.has(line.stations[p])) g.atStation[line.stations[p]].push(id);
       g.edgeTo.push([]);
       g.edgeCost.push([]);
       g.edgeKind.push([]);
@@ -182,10 +209,13 @@ function expand(state: GameState, lines: Line[]): Expanded {
     for (let p = 0; p + 1 < line.stations.length; p++) {
       const a = base + p;
       const b = base + p + 1;
+      const dwell = lineServesStation(line, line.stations[p + 1], state.stations)
+        ? PARAMS.STATION_DWELL
+        : 0;
       const ride =
         (dist(state.stations[line.stations[p]].pos, state.stations[line.stations[p + 1]].pos) /
           PARAMS.TRAIN_SPEED +
-          PARAMS.STATION_DWELL) *
+          dwell) *
         pen;
       link(a, b, ride, KIND_RIDE);
       link(b, a, ride, KIND_RIDE);

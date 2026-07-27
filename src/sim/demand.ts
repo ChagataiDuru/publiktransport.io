@@ -1,5 +1,6 @@
 import { dist } from './map.ts';
 import { PARAMS } from './params.ts';
+import { strategicDemandMultiplier } from './gameplay.ts';
 import type { GameState, Id, Neighborhood } from './types.ts';
 
 /**
@@ -31,13 +32,16 @@ export function buildOdMatrix(neighborhoods: Neighborhood[]): number[][] {
 export function effectiveDemand(state: GameState, i: Id, j: Id): number {
   const base = state.odMatrix[i][j];
   const rush = state.rushHour;
-  if (!rush || !rush.active) return base;
-  const hit =
-    rush.neighborhood === i ||
-    rush.neighborhood === j ||
-    rush.secondary === i ||
-    rush.secondary === j;
-  return hit ? base * PARAMS.RUSH_MULTIPLIER : base;
+  const rushHit = Boolean(
+    rush?.active &&
+      (rush.neighborhood === i ||
+        rush.neighborhood === j ||
+        rush.secondary === i ||
+        rush.secondary === j),
+  );
+  const multiplier =
+    (rushHit ? PARAMS.RUSH_MULTIPLIER : 1) * strategicDemandMultiplier(state, i, j);
+  return base * Math.min(PARAMS.MAX_DEMAND_MULTIPLIER, multiplier);
 }
 
 /** Straight-line car travel time before congestion is applied. */

@@ -5,6 +5,7 @@ import { drawNeighborhoods } from './neighborhoods.ts';
 import { drawDesireOverlay, drawFlowOverlay, drawFocusPair } from './overlay.ts';
 import { buildStationService, drawStations } from './stations.ts';
 import { drawTrains } from './trains.ts';
+import { createEffectsController } from './effects.ts';
 import { COLORS, fitCamera, type Camera, type ViewState } from './view.ts';
 
 export interface Renderer {
@@ -29,6 +30,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   let geoCache = new Map<number, { pts: Vec2[]; stationAt: number[] }>();
   let displayShare: number[][] = [];
   let lastFrame = 0;
+  const effects = createEffectsController();
 
   const resize = (): void => {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -82,6 +84,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     drawTrains(ctx, state, view, geoCache);
     drawStations(ctx, state, view, buildStationService(state, geoCache));
     drawDraft(ctx, state, view);
+    effects.draw(ctx, state, view, geoCache);
   };
 
   return {

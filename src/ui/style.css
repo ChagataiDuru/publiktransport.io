@@ -595,6 +595,196 @@ button.primary {
   color: var(--mute);
 }
 
+#hud-contract {
+  top: 10px;
+  left: 50%;
+  z-index: 4;
+  display: none;
+  width: min(410px, 38vw);
+  transform: translateX(-50%);
+  border: 1px solid rgba(232, 237, 240, 0.28);
+  background: rgba(16, 26, 34, 0.9);
+  padding: 7px 10px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+#hud-contract.show {
+  display: block;
+}
+
+#hud-contract .contract-title {
+  color: var(--p1);
+  font-family: var(--cond);
+  letter-spacing: 0.2em;
+}
+
+#hud-contract .contract-title.final {
+  color: var(--rush);
+  font-size: 14px;
+}
+
+#hud-contract > b,
+#hud-contract > span {
+  display: block;
+  margin-top: 2px;
+}
+
+#hud-contract > span {
+  color: var(--mute);
+}
+
+.contract-bars {
+  margin-top: 5px;
+}
+
+.contract-bars label {
+  display: grid;
+  grid-template-columns: 44px 1fr 42px;
+  gap: 5px;
+  align-items: center;
+}
+
+.contract-bars em,
+.contract-bars strong {
+  color: var(--mute);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.contract-bars i {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  background: var(--ink-3);
+}
+
+.contract-bars u {
+  display: block;
+  height: 100%;
+}
+
+#hud-frontlines {
+  top: 294px;
+  right: 14px;
+  width: 216px;
+  pointer-events: auto;
+  background: rgba(16, 26, 34, 0.72);
+  font-family: var(--mono);
+}
+
+#hud-frontlines .ph {
+  padding: 5px 8px;
+  color: var(--mute);
+  font-family: var(--cond);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+}
+
+#hud-frontlines button {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--ink-3);
+  background: transparent;
+  padding: 5px 8px;
+  text-align: left;
+}
+
+#hud-frontlines button b,
+#hud-frontlines button span {
+  display: block;
+}
+
+#hud-frontlines button b {
+  font-family: var(--cond);
+  letter-spacing: 0.08em;
+}
+
+#hud-frontlines button span {
+  color: var(--mute);
+  font-size: 9px;
+}
+
+#hud-events {
+  top: 154px;
+  left: 14px;
+  width: 230px;
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
+#hud-events div {
+  margin-bottom: 3px;
+  border-left: 2px solid var(--paper);
+  background: rgba(16, 26, 34, 0.66);
+  padding: 4px 6px;
+  color: var(--mute);
+}
+
+#impact-card {
+  top: 92px;
+  left: 50%;
+  display: none;
+  min-width: 250px;
+  transform: translateX(-50%);
+  border-left: 3px solid var(--p1);
+  background: rgba(16, 26, 34, 0.94);
+  padding: 9px 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+#impact-card.show {
+  display: block;
+}
+
+#impact-card b,
+#impact-card span {
+  display: block;
+}
+
+#impact-card b {
+  color: var(--p1);
+  font-family: var(--cond);
+  letter-spacing: 0.14em;
+}
+
+#impact-card span {
+  margin-top: 3px;
+  color: var(--paper);
+}
+
+#opening-guide {
+  bottom: 48px;
+  left: 50%;
+  display: none;
+  transform: translateX(-50%);
+  border: 1px solid var(--p1);
+  background: rgba(16, 26, 34, 0.94);
+  padding: 7px 12px;
+  color: var(--p1);
+  font-family: var(--cond);
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  animation: guide-pulse 1.2s ease-in-out infinite;
+}
+
+#opening-guide.show {
+  display: block;
+}
+
+#opening-guide.danger {
+  border-color: var(--rush);
+  color: var(--rush);
+}
+
+@keyframes guide-pulse {
+  50% { opacity: 0.58; }
+}
+
 #hud-hint {
   bottom: 12px;
   left: 50%;

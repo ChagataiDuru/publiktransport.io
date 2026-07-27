@@ -1,7 +1,8 @@
-import { bumpLandValue, createLineCost, extendLineCost, pushEvent } from './economy.ts';
+import { bumpLandValue, createLineCost, extendLineCost } from './economy.ts';
+import { pushGameEvent } from './events.ts';
 import { buildAdjacency } from './map.ts';
 import { LIMITS, LINE_COLORS, PARAMS } from './params.ts';
-import { updateLineDerived } from './network.ts';
+import { getServiceStops, updateLineDerived } from './network.ts';
 import type { Command, GameState, Id, Line, MapEdge, PlayerId } from './types.ts';
 
 const adjacencyCache = new WeakMap<MapEdge[], Id[][]>();
@@ -74,6 +75,19 @@ export function validate(state: GameState, cmd: Command): Validation {
       if (freePlatforms(state, cmd.station) < 1) {
         return fail(`${state.stations[cmd.station].name}: no free platform`);
       }
+      if (line.servicePlan === 'express') {
+        const nextStations =
+          cmd.end === 'head'
+            ? [cmd.station, ...line.stations]
+            : [...line.stations, cmd.station];
+        const nextLine: Line = { ...line, stations: nextStations };
+        const before = new Set(getServiceStops(line, state.stations));
+        for (const station of getServiceStops(nextLine, state.stations)) {
+          if (!before.has(station) && freePlatforms(state, station) < 1) {
+            return fail(`${state.stations[station].name}: no free platform`);
+          }
+        }
+      }
       const anchor = cmd.end === 'head' ? line.stations[0] : line.stations[line.stations.length - 1];
       if (!areAdjacent(state, anchor, cmd.station)) return fail('no corridor from that end');
       const cost = extendLineCost(state, cmd.player, anchor, cmd.station);
@@ -101,6 +115,40 @@ export function validate(state: GameState, cmd: Command): Validation {
       if (!line) return fail('no such line');
       if (line.trains <= 0) return fail('no trains left');
       return { ok: true, cost: -PARAMS.TRAIN_COST * PARAMS.REFUND_RATE };
+    }
+
+    case 'DispatchRapidService': {
+      const line = findLine(state, cmd.player, cmd.line);
+      if (!line) return fail('no such line');
+      if (line.dispatchEndsAtTick > state.tick) return fail('rapid service already active');
+      if (player.dispatchReadyAtTick > state.tick) return fail('rapid service cooling down');
+      if (player.cash < PARAMS.RAPID_DISPATCH_COST) {
+        return fail(
+          'not enough cash',
+          'insufficient_funds',
+          PARAMS.RAPID_DISPATCH_COST,
+          player.cash,
+        );
+      }
+      return { ok: true, cost: PARAMS.RAPID_DISPATCH_COST };
+    }
+
+    case 'SetServicePlan': {
+      const line = findLine(state, cmd.player, cmd.line);
+      if (!line) return fail('no such line');
+      if (line.servicePlan === cmd.servicePlan) return fail('service plan unchanged');
+      if (cmd.servicePlan === 'express' && line.stations.length < PARAMS.EXPRESS_MIN_STATIONS) {
+        return fail(`express needs ${PARAMS.EXPRESS_MIN_STATIONS} stations`);
+      }
+      if (cmd.servicePlan === 'local') {
+        const currentlyServed = new Set(getServiceStops(line, state.stations));
+        for (const station of line.stations) {
+          if (!currentlyServed.has(station) && freePlatforms(state, station) < 1) {
+            return fail(`${state.stations[station].name}: no free platform`);
+          }
+        }
+      }
+      return { ok: true };
     }
   }
 }
@@ -134,6 +182,8 @@ export function applyCommand(state: GameState, cmd: Command): boolean {
         segmentFlow: [],
         trackLength: 0,
         investment: cost,
+        servicePlan: 'local',
+        dispatchEndsAtTick: 0,
       };
       for (const s of cmd.stations) {
         state.platformUsage[s] += 1;
@@ -142,33 +192,56 @@ export function applyCommand(state: GameState, cmd: Command): boolean {
       updateLineDerived(state.stations, line);
       player.lines.push(line);
       state.netDirty[cmd.player] = true;
-      pushEvent(state, cmd.player, `new line through ${cmd.stations.length} stations`);
+      pushGameEvent(state, {
+        kind: 'serviceOpened',
+        player: cmd.player,
+        lineId: line.id,
+        stationIds: [...cmd.stations],
+      });
       return true;
     }
 
     case 'ExtendLine': {
       const line = findLine(state, cmd.player, cmd.line)!;
+      const servedBefore = new Set(getServiceStops(line, state.stations));
       const anchor = cmd.end === 'head' ? line.stations[0] : line.stations[line.stations.length - 1];
       const cost = extendLineCost(state, cmd.player, anchor, cmd.station);
       player.cash -= cost;
       line.investment += cost;
       if (cmd.end === 'head') line.stations.unshift(cmd.station);
       else line.stations.push(cmd.station);
-      state.platformUsage[cmd.station] += 1;
+      const servedAfter = new Set(getServiceStops(line, state.stations));
+      for (const station of servedBefore) {
+        if (!servedAfter.has(station)) state.platformUsage[station] -= 1;
+      }
+      for (const station of servedAfter) {
+        if (!servedBefore.has(station)) state.platformUsage[station] += 1;
+      }
       bumpLandValue(state, cmd.station);
       updateLineDerived(state.stations, line);
       state.netDirty[cmd.player] = true;
+      pushGameEvent(state, {
+        kind: 'lineExtended',
+        player: cmd.player,
+        lineId: line.id,
+        stationId: cmd.station,
+        end: cmd.end,
+      });
       return true;
     }
 
     case 'DeleteLine': {
       const idx = player.lines.findIndex((l) => l.id === cmd.line);
       const line = player.lines[idx];
-      for (const s of line.stations) state.platformUsage[s] -= 1;
+      for (const s of getServiceStops(line, state.stations)) state.platformUsage[s] -= 1;
       player.cash += line.investment * PARAMS.REFUND_RATE;
       player.lines.splice(idx, 1);
       state.netDirty[cmd.player] = true;
-      pushEvent(state, cmd.player, `line closed`);
+      pushGameEvent(state, {
+        kind: 'lineDeleted',
+        player: cmd.player,
+        lineId: line.id,
+      });
       return true;
     }
 
@@ -179,6 +252,12 @@ export function applyCommand(state: GameState, cmd: Command): boolean {
       line.trains += 1;
       updateLineDerived(state.stations, line);
       state.netDirty[cmd.player] = true;
+      pushGameEvent(state, {
+        kind: 'capacityAdded',
+        player: cmd.player,
+        lineId: line.id,
+        trainDelta: 1,
+      });
       return true;
     }
 
@@ -189,6 +268,43 @@ export function applyCommand(state: GameState, cmd: Command): boolean {
       player.cash += PARAMS.TRAIN_COST * PARAMS.REFUND_RATE;
       updateLineDerived(state.stations, line);
       state.netDirty[cmd.player] = true;
+      pushGameEvent(state, {
+        kind: 'capacityAdded',
+        player: cmd.player,
+        lineId: line.id,
+        trainDelta: -1,
+      });
+      return true;
+    }
+
+    case 'DispatchRapidService': {
+      const line = findLine(state, cmd.player, cmd.line)!;
+      player.cash -= PARAMS.RAPID_DISPATCH_COST;
+      line.dispatchEndsAtTick =
+        state.tick + Math.round(PARAMS.RAPID_DISPATCH_DURATION * PARAMS.TICK_HZ);
+      player.dispatchReadyAtTick =
+        state.tick + Math.round(PARAMS.RAPID_DISPATCH_COOLDOWN * PARAMS.TICK_HZ);
+      updateLineDerived(state.stations, line);
+      state.netDirty[cmd.player] = true;
+      pushGameEvent(state, { kind: 'dispatchStarted', player: cmd.player, lineId: line.id });
+      return true;
+    }
+
+    case 'SetServicePlan': {
+      const line = findLine(state, cmd.player, cmd.line)!;
+      const before = new Set(getServiceStops(line, state.stations));
+      line.servicePlan = cmd.servicePlan;
+      const after = new Set(getServiceStops(line, state.stations));
+      for (const station of before) if (!after.has(station)) state.platformUsage[station] -= 1;
+      for (const station of after) if (!before.has(station)) state.platformUsage[station] += 1;
+      updateLineDerived(state.stations, line);
+      state.netDirty[cmd.player] = true;
+      pushGameEvent(state, {
+        kind: 'servicePlanChanged',
+        player: cmd.player,
+        lineId: line.id,
+        servicePlan: cmd.servicePlan,
+      });
       return true;
     }
   }

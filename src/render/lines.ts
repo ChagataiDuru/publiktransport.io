@@ -195,7 +195,15 @@ export function drawLines(
 
       ctx.strokeStyle = line.color;
       ctx.lineWidth = LINE_WIDTH * view.cam.s;
+      if (line.servicePlan === 'express') ctx.setLineDash([14 * view.cam.s, 4 * view.cam.s]);
       strokePolyline(ctx, view.cam, geo.pts);
+      ctx.setLineDash([]);
+
+      if (line.dispatchEndsAtTick > state.tick) {
+        ctx.strokeStyle = rgb(RGB.paper, 0.28 + 0.2 * Math.sin(view.time * 10));
+        ctx.lineWidth = (LINE_WIDTH + 2) * view.cam.s;
+        strokePolyline(ctx, view.cam, geo.pts);
+      }
     }
   }
 }

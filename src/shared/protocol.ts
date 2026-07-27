@@ -8,7 +8,9 @@ export type PlayerCommand =
   | Omit<Extract<Command, { type: 'ExtendLine' }>, 'player'>
   | Omit<Extract<Command, { type: 'DeleteLine' }>, 'player'>
   | Omit<Extract<Command, { type: 'BuyTrain' }>, 'player'>
-  | Omit<Extract<Command, { type: 'SellTrain' }>, 'player'>;
+  | Omit<Extract<Command, { type: 'SellTrain' }>, 'player'>
+  | Omit<Extract<Command, { type: 'DispatchRapidService' }>, 'player'>
+  | Omit<Extract<Command, { type: 'SetServicePlan' }>, 'player'>;
 
 export interface PublicSeat {
   id: number;
@@ -75,7 +77,13 @@ export function isPlayerCommand(value: unknown): value is PlayerCommand {
     case 'DeleteLine':
     case 'BuyTrain':
     case 'SellTrain':
+    case 'DispatchRapidService':
       return Number.isInteger(command.line);
+    case 'SetServicePlan':
+      return (
+        Number.isInteger(command.line) &&
+        (command.servicePlan === 'local' || command.servicePlan === 'express')
+      );
     default:
       return false;
   }

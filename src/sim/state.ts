@@ -11,6 +11,8 @@ import {
 } from './map.ts';
 import { logitShares, lerpSplit } from './modechoice.ts';
 import { buildRoutes } from './network.ts';
+import { pushGameEvent } from './events.ts';
+import { updateGameplay } from './gameplay.ts';
 import { PARAMS } from './params.ts';
 import { createRng, nextInt } from './rng.ts';
 import type { Command, GameState, Id, MapEdge, Player, PlayerId, RouteTable } from './types.ts';
@@ -32,6 +34,7 @@ function makePlayer(id: PlayerId): Player {
     incomeRate: 0,
     upkeepRate: 0,
     subsidyRate: 0,
+    dispatchReadyAtTick: 0,
     cityShare: 0,
     homeDistrict: HOME_SEATS[id % HOME_SEATS.length].district,
   };
@@ -83,6 +86,12 @@ export function createInitialState(
     cityShare: emptyShare(),
     botLastDecisionTick: new Array<number>(playerCount).fill(-1e9),
     events: [],
+    nextEventId: 1,
+    civicContract: null,
+    nextContractTick: Math.round(PARAMS.CIVIC_CONTRACT_FIRST_DELAY * PARAMS.TICK_HZ),
+    nextContractId: 1,
+    finalMandate: null,
+    districtLeaders: new Array<number>(n).fill(-1),
   };
 
   balanceOpeningCash(state);
@@ -153,6 +162,7 @@ export function tick(state: GameState, commands: Command[]): GameState {
     assignFlows(state);
     updateLoadFactors(state);
     updateScores(state);
+    updateGameplay(state);
   }
 
   // 5.5 — economy
@@ -172,8 +182,12 @@ function updateRushHour(state: GameState): void {
   if (rush) {
     if (!rush.active && state.tick >= rush.startsAtTick) {
       rush.active = true;
-      const also = rush.secondary >= 0 ? ` + ${state.neighborhoods[rush.secondary].name}` : '';
-      pushEvent(state, -1, `rush hour: ${state.neighborhoods[rush.neighborhood].name}${also}`);
+      pushGameEvent(state, {
+        kind: 'rushStarted',
+        player: -1,
+        originId: rush.neighborhood,
+        destinationId: rush.secondary,
+      });
     }
     if (state.tick >= rush.endsAtTick) {
       state.rushHour = null;
@@ -337,11 +351,33 @@ export function hashState(state: GameState): string {
       num(l.headway);
       num(l.loadFactor);
       num(l.ridership);
+      num(l.dispatchEndsAtTick);
+      byte(l.servicePlan === 'express' ? 1 : 0);
       for (const s of l.stations) num(s);
       for (const f of l.segmentFlow) num(f);
     }
   }
   for (const tick of state.botLastDecisionTick) num(tick);
+  num(state.nextEventId);
+  num(state.nextContractTick);
+  num(state.nextContractId);
+  for (const leader of state.districtLeaders) num(leader);
+  if (state.civicContract) {
+    num(state.civicContract.id);
+    num(state.civicContract.originId);
+    num(state.civicContract.destinationId);
+    num(state.civicContract.startsAtTick);
+    num(state.civicContract.endsAtTick);
+    num(state.civicContract.winner ?? -1);
+    for (const value of state.civicContract.baselineShares) num(value);
+    for (const value of state.civicContract.currentGains) num(value);
+  } else byte(201);
+  if (state.finalMandate) {
+    num(state.finalMandate.originId);
+    num(state.finalMandate.destinationId);
+    num(state.finalMandate.startsAtTick);
+    byte(state.finalMandate.active ? 1 : 0);
+  } else byte(202);
   if (state.rushHour) {
     num(state.rushHour.neighborhood);
     num(state.rushHour.secondary);

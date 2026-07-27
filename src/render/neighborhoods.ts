@@ -1,6 +1,7 @@
 import { PARAMS, PLAYER_COLORS } from '../sim/params.ts';
 import type { GameState } from '../sim/types.ts';
 import { COLORS, PLAYER_RGB, RGB, mix, rgb, toScreen, type ViewState } from './view.ts';
+import { districtFrontline } from '../sim/rivalry.ts';
 
 /**
  * District polygons filled by blending the three modal-share colours.
@@ -63,6 +64,58 @@ export function drawNeighborhoods(
     ctx.setLineDash([3, 5]);
     ctx.stroke();
     ctx.setLineDash([]);
+  }
+
+  for (const nb of state.neighborhoods) {
+    const front = districtFrontline(state, nb.id);
+    if (!front.contested && front.leader === null) continue;
+    ctx.beginPath();
+    const p0 = toScreen(view.cam, nb.polygon[0]);
+    ctx.moveTo(p0.x, p0.y);
+    for (let i = 1; i < nb.polygon.length; i++) {
+      const point = toScreen(view.cam, nb.polygon[i]);
+      ctx.lineTo(point.x, point.y);
+    }
+    ctx.closePath();
+    if (front.contested) ctx.setLineDash([7, 5]);
+    ctx.strokeStyle =
+      front.leader === null
+        ? rgb(RGB.paper, 0.46)
+        : rgb(PLAYER_RGB[front.leader], front.contested ? 0.55 : 0.34);
+    ctx.lineWidth = front.contested ? 2.6 : 1.8;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  const strategic = state.finalMandate ?? state.civicContract;
+  if (strategic) {
+    const originId = strategic.originId;
+    const destinationId = strategic.destinationId;
+    const a = toScreen(view.cam, state.neighborhoods[originId].centroid);
+    const b = toScreen(view.cam, state.neighborhoods[destinationId].centroid);
+    const pulse = 0.55 + 0.35 * Math.sin(view.time * 6);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.setLineDash([8, 7]);
+    ctx.strokeStyle = rgb(state.finalMandate ? RGB.rush : RGB.paper, pulse);
+    ctx.lineWidth = state.finalMandate ? 4 : 2.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const id of [originId, destinationId]) {
+      const district = state.neighborhoods[id];
+      ctx.beginPath();
+      const q0 = toScreen(view.cam, district.polygon[0]);
+      ctx.moveTo(q0.x, q0.y);
+      for (let i = 1; i < district.polygon.length; i++) {
+        const point = toScreen(view.cam, district.polygon[i]);
+        ctx.lineTo(point.x, point.y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = rgb(state.finalMandate ? RGB.rush : RGB.paper, pulse);
+      ctx.lineWidth = state.finalMandate ? 4 : 3;
+      ctx.stroke();
+    }
   }
 
   // Rush-hour marker: telegraphed for a few seconds, then a hard pulse.

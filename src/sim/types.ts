@@ -51,6 +51,8 @@ export interface Line {
   trackLength: number;
   /** Everything spent on this line so far — the basis for the 50% refund. */
   investment: number;
+  servicePlan: 'local' | 'express';
+  dispatchEndsAtTick: number;
 }
 
 export interface Player {
@@ -66,6 +68,46 @@ export interface Player {
   homeDistrict: Id;
   /** Public money paid to whoever is behind the leader, $/second. */
   subsidyRate: number;
+  dispatchReadyAtTick: number;
+}
+
+export type GameEvent =
+  | { id: number; tick: number; kind: 'serviceOpened'; player: PlayerId; lineId: Id; stationIds: Id[] }
+  | { id: number; tick: number; kind: 'lineExtended'; player: PlayerId; lineId: Id; stationId: Id; end: 'head' | 'tail' }
+  | { id: number; tick: number; kind: 'lineDeleted'; player: PlayerId; lineId: Id }
+  | { id: number; tick: number; kind: 'capacityAdded'; player: PlayerId; lineId: Id; trainDelta: number }
+  | { id: number; tick: number; kind: 'rushStarted'; player: -1; originId: Id; destinationId: Id }
+  | { id: number; tick: number; kind: 'contractStarted'; player: -1; contractId: number; originId: Id; destinationId: Id }
+  | { id: number; tick: number; kind: 'contractResolved'; player: PlayerId | -1; contractId: number; reward: number }
+  | { id: number; tick: number; kind: 'dispatchStarted' | 'dispatchExpired'; player: PlayerId; lineId: Id }
+  | { id: number; tick: number; kind: 'districtChanged'; player: PlayerId | -1; districtId: Id; previous: PlayerId | -1 }
+  | { id: number; tick: number; kind: 'finalMandate'; player: -1; originId: Id; destinationId: Id; active: boolean }
+  | { id: number; tick: number; kind: 'servicePlanChanged'; player: PlayerId; lineId: Id; servicePlan: 'local' | 'express' }
+  | { id: number; tick: number; kind: 'text'; player: PlayerId | -1; text: string };
+
+export interface CivicContract {
+  id: number;
+  phase: 'announced' | 'active' | 'resolved';
+  originId: Id;
+  destinationId: Id;
+  announcedAtTick: number;
+  startsAtTick: number;
+  endsAtTick: number;
+  baselineShares: number[];
+  currentGains: number[];
+  targetGain: number;
+  reward: number;
+  demandMultiplier: number;
+  winner: PlayerId | null;
+  resolvedAtTick: number | null;
+}
+
+export interface FinalMandate {
+  originId: Id;
+  destinationId: Id;
+  announcedAtTick: number;
+  startsAtTick: number;
+  active: boolean;
 }
 
 export interface RushHour {
@@ -128,8 +170,13 @@ export interface GameState {
   cityShare: ModalShare;
 
   botLastDecisionTick: number[];
-  /** Rolling record of notable events for the HUD ticker. */
-  events: { tick: number; text: string; player: PlayerId | -1 }[];
+  events: GameEvent[];
+  nextEventId: number;
+  civicContract: CivicContract | null;
+  nextContractTick: number;
+  nextContractId: number;
+  finalMandate: FinalMandate | null;
+  districtLeaders: Array<PlayerId | -1>;
 }
 
 export type Command =
@@ -137,4 +184,6 @@ export type Command =
   | { type: 'ExtendLine'; player: PlayerId; line: Id; station: Id; end: 'head' | 'tail' }
   | { type: 'DeleteLine'; player: PlayerId; line: Id }
   | { type: 'BuyTrain'; player: PlayerId; line: Id }
-  | { type: 'SellTrain'; player: PlayerId; line: Id };
+  | { type: 'SellTrain'; player: PlayerId; line: Id }
+  | { type: 'DispatchRapidService'; player: PlayerId; line: Id }
+  | { type: 'SetServicePlan'; player: PlayerId; line: Id; servicePlan: 'local' | 'express' };

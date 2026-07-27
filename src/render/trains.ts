@@ -1,5 +1,6 @@
 import type { GameState, Vec2 } from '../sim/types.ts';
 import { RGB, rgb, toScreen, type ViewState } from './view.ts';
+import { effectiveTrainCount } from '../sim/network.ts';
 
 interface Measured {
   pts: Vec2[];
@@ -54,7 +55,8 @@ export function drawTrains(
 ): void {
   for (const p of state.players) {
     for (const line of p.lines) {
-      if (line.trains <= 0) continue;
+      const trainCount = effectiveTrainCount(line);
+      if (trainCount <= 0) continue;
       const g = geo.get(line.id);
       if (!g || g.pts.length < 2) continue;
       const m = measure(g.pts);
@@ -64,9 +66,9 @@ export function drawTrains(
       const fullness = Math.min(1.4, line.loadFactor);
       const radius = (2.4 + fullness * 1.6) * view.cam.s;
 
-      for (let i = 0; i < line.trains; i++) {
+      for (let i = 0; i < trainCount; i++) {
         // Position around a there-and-back loop of length 2 * total.
-        const phase = ((view.time / rtt + i / line.trains) % 1) * 2 * m.total;
+        const phase = ((view.time / rtt + i / trainCount) % 1) * 2 * m.total;
         const s = phase <= m.total ? phase : 2 * m.total - phase;
         const pos = toScreen(view.cam, at(m, s));
 
@@ -77,7 +79,12 @@ export function drawTrains(
 
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = line.loadFactor > 1 ? rgb(RGB.rush, 0.95) : rgb(RGB.paper, 0.92);
+        ctx.fillStyle =
+          i >= line.trains
+            ? rgb(RGB.p1, 0.96)
+            : line.loadFactor > 1
+              ? rgb(RGB.rush, 0.95)
+              : rgb(RGB.paper, 0.92);
         ctx.fill();
       }
     }

@@ -1,5 +1,6 @@
 import { dist } from './map.ts';
 import { PARAMS } from './params.ts';
+import { pushTextEvent } from './events.ts';
 import type { GameState, Id, PlayerId } from './types.ts';
 
 /**
@@ -118,6 +119,5 @@ export function applyEconomy(state: GameState, dt: number): void {
 }
 
 export function pushEvent(state: GameState, player: PlayerId | -1, text: string): void {
-  state.events.push({ tick: state.tick, text, player });
-  if (state.events.length > 24) state.events.splice(0, state.events.length - 24);
+  pushTextEvent(state, player, text);
 }

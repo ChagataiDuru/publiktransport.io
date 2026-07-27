@@ -26,6 +26,40 @@ export function decide(state: GameState, p: PlayerId): Command[] {
   if (state.tick < PARAMS.BOT_OPENING_DELAY * PARAMS.TICK_HZ) return [];
   const player = state.players[p];
 
+  const tacticalLine = player.lines
+    .filter((line) => line.loadFactor > 0.9)
+    .sort((a, b) => b.loadFactor - a.loadFactor || a.id - b.id)[0];
+  const strategicMoment =
+    state.civicContract?.phase === 'active' ||
+    Boolean(state.rushHour?.active) ||
+    Boolean(state.finalMandate?.active);
+  if (
+    tacticalLine &&
+    (strategicMoment || tacticalLine.loadFactor > 1.3) &&
+    player.cash > PARAMS.RAPID_DISPATCH_COST * 2
+  ) {
+    const dispatch: Command = { type: 'DispatchRapidService', player: p, line: tacticalLine.id };
+    if (validate(state, dispatch).ok) return [dispatch];
+  }
+
+  const expressCandidate = player.lines
+    .filter(
+      (line) =>
+        line.servicePlan === 'local' &&
+        line.stations.length >= PARAMS.EXPRESS_MIN_STATIONS &&
+        line.loadFactor > 0.75,
+    )
+    .sort((a, b) => b.stations.length - a.stations.length || a.id - b.id)[0];
+  if (strategicMoment && expressCandidate) {
+    const express: Command = {
+      type: 'SetServicePlan',
+      player: p,
+      line: expressCandidate.id,
+      servicePlan: 'express',
+    };
+    if (validate(state, express).ok) return [express];
+  }
+
   // 1. Only a genuinely overloaded line interrupts expansion. The old 85%
   // threshold made the bot spend almost every dollar on trains and left the
   // outer map idle.
@@ -82,10 +116,24 @@ interface Pair {
  */
 function rankedTargets(state: GameState, p: PlayerId): Pair[] {
   const home = state.players[p].homeDistrict;
+  const contract = state.civicContract;
+  const mandate = state.finalMandate;
   return pressureList(state, p).map((entry) => ({
     i: entry.i,
     j: entry.j,
-    value: entry.value * (entry.i === home || entry.j === home ? HOME_BIAS : 1),
+    value:
+      entry.value *
+      (entry.i === home || entry.j === home ? HOME_BIAS : 1) *
+      (contract &&
+      (entry.i === contract.originId || entry.j === contract.originId) &&
+      (entry.i === contract.destinationId || entry.j === contract.destinationId)
+        ? 2.5
+        : 1) *
+      (mandate &&
+      (entry.i === mandate.originId || entry.j === mandate.originId) &&
+      (entry.i === mandate.destinationId || entry.j === mandate.destinationId)
+        ? 3
+        : 1),
   })).sort((a, b) => b.value - a.value || a.i - b.i || a.j - b.j);
 }
 
