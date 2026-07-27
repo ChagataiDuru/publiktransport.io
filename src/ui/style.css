@@ -32,6 +32,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+body:not(.playing) #modalbar,
+body:not(.playing) #stage {
+  visibility: hidden;
+}
+
 button,
 input {
   font: inherit;

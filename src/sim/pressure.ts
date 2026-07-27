@@ -1,4 +1,5 @@
 import { carTime, effectiveDemand } from './demand.ts';
+import { buildRoutes } from './network.ts';
 import type { GameState, Id, PlayerId } from './types.ts';
 
 /**
@@ -26,7 +27,10 @@ export interface Pressure {
  */
 export function pressureList(state: GameState, player: PlayerId, slack = 1.15): Pressure[] {
   const n = state.neighborhoods.length;
-  const routes = state.routes[player];
+  // Authoritative snapshots intentionally omit the large route-table cache.
+  // The HUD can cheaply derive this player's table from the serialized lines;
+  // bots running in the simulation continue to use the existing cache.
+  const routes = state.routes[player] ?? buildRoutes(state, player);
   const out: Pressure[] = [];
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {

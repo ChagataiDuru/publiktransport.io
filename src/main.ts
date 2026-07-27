@@ -258,6 +258,7 @@ function connectOnline(): void {
   gameActive = false;
   paused = false;
   document.body.classList.add('online');
+  document.body.classList.remove('playing');
   $('menu-screen').classList.remove('show');
   $('lobby-screen').classList.add('show');
   ($('invite-url') as HTMLElement).textContent = location.origin;
@@ -265,6 +266,11 @@ function connectOnline(): void {
   online = new OnlineClient({
     onLobby: renderLobby,
     onMatch(nextState, playerId, nextNames, nextBots) {
+      const newMatch = !gameActive || state.seed !== nextState.seed || nextState.tick < state.tick;
+      if (newMatch) {
+        builder.cancel();
+        pending.length = 0;
+      }
       state = nextState;
       localPlayer = playerId;
       names = nextNames;
@@ -302,6 +308,9 @@ function renderLobby(lobby: LobbyState, seat: PlayerId | null): void {
   if (seat !== null) localPlayer = seat;
   if (lobby.phase === 'lobby') {
     gameActive = false;
+    builder.cancel();
+    pending.length = 0;
+    document.body.classList.remove('playing');
     $('lobby-screen').classList.add('show');
     $('menu-screen').classList.remove('show');
   }
@@ -347,6 +356,7 @@ function playerName(): string {
 }
 
 function hideScreens(): void {
+  document.body.classList.add('playing');
   $('menu-screen').classList.remove('show');
   $('lobby-screen').classList.remove('show');
 }
@@ -360,6 +370,7 @@ function showMenu(): void {
   gameActive = false;
   paused = true;
   document.body.classList.remove('online');
+  document.body.classList.remove('playing');
   $('lobby-screen').classList.remove('show');
   $('menu-screen').classList.add('show');
   setNetworkStatus('', false);

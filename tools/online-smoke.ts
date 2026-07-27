@@ -57,6 +57,21 @@ async function main(): Promise<void> {
     (message) => message.type === 'snapshot' && message.state.players.length === 2,
   );
   if (first.type !== 'snapshot') throw new Error('Match did not start');
+  const initialTick = first.state.tick;
+  const advanced = await waitFor(
+    host,
+    (message) => message.type === 'snapshot' && message.state.tick >= initialTick + 2,
+  );
+  if (advanced.type !== 'snapshot') throw new Error('Authoritative clock did not advance');
+
+  host.socket.send(
+    stringifyNetwork({
+      type: 'command',
+      seq: 1,
+      command: { type: 'BuyTrain', line: first.state.players[0].lines[0].id },
+    } satisfies ClientMessage),
+  );
+  await waitFor(host, (message) => message.type === 'commandAccepted' && message.seq === 1);
 
   guest.socket.close();
   await waitFor(host, (message) => message.type === 'snapshot' && message.botSeats.includes(1));
