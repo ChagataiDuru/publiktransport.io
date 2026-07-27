@@ -1,3 +1,4 @@
+import { freePlatforms, getAdjacency } from '../sim/commands.ts';
 import { edgeKey } from '../sim/map.ts';
 import type { GameState, Id, Line, Vec2 } from '../sim/types.ts';
 import { RGB, rgb, toScreen, type Camera, type ViewState } from './view.ts';
@@ -157,7 +158,7 @@ export function drawCorridors(
   ctx.lineCap = 'round';
   for (const e of state.edges) {
     const pts = octilinear(state.stations[e.a].pos, state.stations[e.b].pos);
-    ctx.strokeStyle = rgb(RGB.paper, e.express ? 0.055 : 0.1);
+    ctx.strokeStyle = rgb(RGB.paper, e.express ? 0.09 : 0.17);
     ctx.lineWidth = e.express ? 1 : 2;
     if (e.express) ctx.setLineDash([5, 7]);
     strokePolyline(ctx, view.cam, pts);
@@ -209,6 +210,26 @@ export function drawDraft(ctx: CanvasRenderingContext2D, state: GameState, view:
   const color = draft.candidateValid || draft.candidate === null ? RGB.p1 : RGB.rush;
 
   const chain: Id[] = draft.stations.slice();
+
+  // Light up every stop the open end can actually reach. Track only follows
+  // corridors that exist, and without this the rule is invisible — you click a
+  // station across the map, nothing happens, and the game looks broken.
+  const tailId0 = chain[chain.length - 1];
+  for (const nId of getAdjacency(state)[tailId0] ?? []) {
+    if (chain.includes(nId)) continue;
+    const open = freePlatforms(state, nId) >= 1;
+    const seg = octilinear(state.stations[tailId0].pos, state.stations[nId].pos);
+    ctx.strokeStyle = rgb(open ? RGB.p1 : RGB.rush, 0.3);
+    ctx.lineWidth = 2;
+    strokePolyline(ctx, view.cam, seg);
+
+    const c = toScreen(view.cam, state.stations[nId].pos);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 13 * view.cam.s, 0, Math.PI * 2);
+    ctx.strokeStyle = rgb(open ? RGB.p1 : RGB.rush, 0.55);
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  }
   const pts: Vec2[] = [];
   for (let i = 0; i + 1 < chain.length; i++) {
     const seg = octilinear(state.stations[chain[i]].pos, state.stations[chain[i + 1]].pos);

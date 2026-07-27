@@ -11,7 +11,6 @@ const HIT_RADIUS = 22; // world units
 export interface LineBuilder {
   draft: Draft | null;
   hoverStation: Id | null;
-  queue: Command[];
   /** Called by main once per frame after state changes. */
   refresh(state: GameState): void;
   onMove(e: MouseEvent): void;
@@ -39,12 +38,12 @@ export function createLineBuilder(
   canvas: HTMLCanvasElement,
   getState: () => GameState,
   getCamera: () => Camera,
+  emit: (cmd: Command) => void,
   player: PlayerId = 0,
 ): LineBuilder {
   const lb: LineBuilder = {
     draft: null,
     hoverStation: null,
-    queue: [],
     refresh,
     onMove,
     onClick,
@@ -208,7 +207,7 @@ export function createLineBuilder(
     if (d.extending !== null) {
       // The anchor is already on the line; everything after it is new.
       for (let i = 1; i < d.stations.length; i++) {
-        lb.queue.push({
+        emit({
           type: 'ExtendLine',
           player,
           line: d.extending,
@@ -218,7 +217,7 @@ export function createLineBuilder(
       }
     } else {
       const cmd: Command = { type: 'CreateLine', player, stations: [...d.stations] };
-      if (validate(state, cmd).ok) lb.queue.push(cmd);
+      if (validate(state, cmd).ok) emit(cmd);
     }
     lb.draft = null;
   }

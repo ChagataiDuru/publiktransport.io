@@ -27,8 +27,11 @@ const canvas = document.getElementById('board') as HTMLCanvasElement;
 const renderer = createRenderer(canvas);
 const pending: Command[] = [];
 
-const builder = createLineBuilder(canvas, () => state, () => renderer.camera, HUMAN);
-const hud = createHud((cmd) => pending.push(cmd), HUMAN);
+// Both input surfaces feed the one queue the loop drains — there is deliberately
+// no second channel for a command to get lost down.
+const emit = (cmd: Command): void => void pending.push(cmd);
+const builder = createLineBuilder(canvas, () => state, () => renderer.camera, emit, HUMAN);
+const hud = createHud(emit, HUMAN);
 const endscreen = createEndScreen();
 createDevPanel(() => {
   // Most knobs feed straight into the next cycle; the ones baked into derived
