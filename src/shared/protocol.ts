@@ -25,6 +25,8 @@ export interface LobbyState {
   phase: 'lobby' | 'playing' | 'ended';
   seats: Array<PublicSeat | null>;
   canStart: boolean;
+  mapId: string;
+  mapName: string;
 }
 
 export type ClientMessage =

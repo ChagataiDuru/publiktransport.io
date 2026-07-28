@@ -69,13 +69,14 @@ export function drawStations(
   service: Map<Id, StationService>,
 ): void {
   const s = view.cam.s;
+  const zoomRatio = s / view.cam.fitScale;
 
   for (const st of state.stations) {
     const c = toScreen(view.cam, st.pos);
     const svc = service.get(st.id);
     const served = svc ? svc.lines.length : 0;
     const passedOnly = Boolean(svc && svc.lines.every((line) => !lineServesStation(line, st.id, state.stations)));
-    const r = (st.isHub ? 10 : 7) * s;
+    const r = Math.max(st.isHub ? 6.5 : 5, Math.min(st.isHub ? 11 : 8, (st.isHub ? 10 : 7) * s));
 
     if (served >= 2 && svc?.tangent) {
       ctx.fillStyle = rgb(RGB.ink);
@@ -101,11 +102,11 @@ export function drawStations(
 
     // Platform pips.
     const used = state.platformUsage[st.id];
-    const pipW = 3 * s;
-    const gap = 2 * s;
+    const pipW = Math.max(2, Math.min(4, 3 * s));
+    const gap = Math.max(1.5, Math.min(3, 2 * s));
     const total = st.platforms;
     const startX = c.x - ((total - 1) * (pipW + gap)) / 2;
-    const y = c.y + r + 5 * s;
+    const y = c.y + r + Math.max(3, 5 * s);
     for (let i = 0; i < total; i++) {
       ctx.fillStyle = i < used ? rgb(RGB.paper, 0.8) : rgb(RGB.paper, 0.16);
       ctx.fillRect(startX + i * (pipW + gap) - pipW / 2, y, pipW, pipW);
@@ -126,13 +127,21 @@ export function drawStations(
   for (const [id, svc] of service) {
     const st = state.stations[id];
     const c = toScreen(view.cam, st.pos);
-    const r = (st.isHub ? 10 : 7) * s;
+    const r = Math.max(st.isHub ? 6.5 : 5, Math.min(st.isHub ? 11 : 8, (st.isHub ? 10 : 7) * s));
     const label = st.name.toUpperCase();
     ctx.fillStyle = rgb(RGB.ink, 0.8);
     const w = ctx.measureText(label).width;
     ctx.fillRect(c.x - w / 2 - 3, c.y - r - 17, w + 6, 13);
     ctx.fillStyle = rgb(RGB.paper, svc.lines.length >= 2 ? 0.95 : 0.72);
     ctx.fillText(label, c.x, c.y - r - 7);
+  }
+  if (zoomRatio >= 1.45) {
+    for (const st of state.stations) {
+      if (service.has(st.id) || st.isHub) continue;
+      const c = toScreen(view.cam, st.pos);
+      ctx.fillStyle = rgb(RGB.paper, 0.55);
+      ctx.fillText(st.name.toUpperCase(), c.x, c.y - 10);
+    }
   }
   ctx.textAlign = 'left';
 
@@ -141,7 +150,8 @@ export function drawStations(
     const st = state.stations[view.hoverStation];
     const c = toScreen(view.cam, st.pos);
     ctx.beginPath();
-    ctx.arc(c.x, c.y, (st.isHub ? 10 : 7) * s + 6, 0, Math.PI * 2);
+    const r = Math.max(st.isHub ? 6.5 : 5, Math.min(st.isHub ? 11 : 8, (st.isHub ? 10 : 7) * s));
+    ctx.arc(c.x, c.y, r + 6, 0, Math.PI * 2);
     ctx.strokeStyle = rgb(RGB.p1, 0.9);
     ctx.lineWidth = 1.6;
     ctx.stroke();

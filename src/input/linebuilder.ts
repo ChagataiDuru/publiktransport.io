@@ -6,7 +6,7 @@ import { dist } from '../sim/map.ts';
 import { LIMITS, PARAMS } from '../sim/params.ts';
 import type { Command, GameState, Id, PlayerId, Vec2 } from '../sim/types.ts';
 
-const HIT_RADIUS = 22; // world units
+const HIT_RADIUS_PX = 12;
 
 export interface LineBuilder {
   draft: Draft | null;
@@ -21,9 +21,9 @@ export interface LineBuilder {
   commit(state: GameState): void;
 }
 
-function stationAt(state: GameState, p: Vec2): Id | null {
+export function stationAt(state: GameState, p: Vec2, camera: Camera): Id | null {
   let best: Id | null = null;
-  let bestD = HIT_RADIUS;
+  let bestD = HIT_RADIUS_PX / camera.s;
   for (const s of state.stations) {
     const d = dist(s.pos, p);
     if (d < bestD) {
@@ -40,6 +40,7 @@ export function createLineBuilder(
   getCamera: () => Camera,
   emit: (cmd: Command) => void,
   getPlayer: () => PlayerId = () => 0,
+  suppressInteraction: () => boolean = () => false,
 ): LineBuilder {
   const lb: LineBuilder = {
     draft: null,
@@ -123,9 +124,10 @@ export function createLineBuilder(
   }
 
   function onMove(e: MouseEvent): void {
+    if (suppressInteraction()) return;
     const state = getState();
     const p = pointer(e);
-    const hit = stationAt(state, p);
+    const hit = stationAt(state, p, getCamera());
     lb.hoverStation = hit;
     if (lb.draft) {
       lb.draft.cursor = p;
@@ -135,11 +137,12 @@ export function createLineBuilder(
   }
 
   function onClick(e: MouseEvent): void {
+    if (suppressInteraction() || e.button !== 0) return;
     const state = getState();
     const player = getPlayer();
     if (state.phase !== 'playing') return;
     const p = pointer(e);
-    const hit = stationAt(state, p);
+    const hit = stationAt(state, p, getCamera());
 
     if (!lb.draft) {
       if (hit === null) return;
@@ -198,7 +201,7 @@ export function createLineBuilder(
   function onDoubleClick(e: MouseEvent): void {
     const state = getState();
     if (!lb.draft) return;
-    if (stationAt(state, pointer(e)) === null) commit(state);
+    if (stationAt(state, pointer(e), getCamera()) === null) commit(state);
   }
 
   function commit(state: GameState): void {

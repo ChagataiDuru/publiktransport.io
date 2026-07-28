@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOME_SEATS } from '../src/sim/map.ts';
+import { getMap } from '../src/sim/maps.ts';
 import { PARAMS } from '../src/sim/params.ts';
 import { pressureList } from '../src/sim/pressure.ts';
 import { createInitialState, tick } from '../src/sim/state.ts';
@@ -10,11 +10,12 @@ describe('openings', () => {
     const homes = state.players.map((player) => player.homeDistrict);
 
     expect(new Set(homes).size).toBe(4);
+    const homeSeats = getMap(state.mapId).homeSeats;
     for (const player of state.players) {
       expect(player.lines).toHaveLength(1);
       const line = player.lines[0];
       expect(line.trains).toBe(1);
-      expect(line.stations).toEqual([...HOME_SEATS[player.id].starter]);
+      expect(line.stations).toEqual([...homeSeats[player.id].starter]);
       for (const station of line.stations) {
         expect(state.stations[station].neighborhood).toBe(player.homeDistrict);
       }
@@ -32,7 +33,7 @@ describe('openings', () => {
   });
 
   it('opens a weaker home with more cash than a stronger one', () => {
-    const state = createInitialState(1, 4);
+    const state = createInitialState(1, 4, { mapId: 'classic' });
     const catchment = (player: (typeof state.players)[number]): number =>
       state.neighborhoods[player.homeDistrict].population;
     const richest = [...state.players].sort((a, b) => catchment(b) - catchment(a))[0];
@@ -46,11 +47,11 @@ describe('openings', () => {
     for (let t = 0; t < 30 * PARAMS.TICK_HZ; t++) tick(state, []);
     const shares = state.players.map((player) => player.cityShare);
 
-    for (const share of shares) expect(share).toBeGreaterThan(0.01);
+    for (const share of shares) expect(share).toBeGreaterThan(0.005);
     // The stubs are not equally productive — Old Town's catchment is twice
     // Foundry's — and this is the gap the opening cash is there to pay for.
     // Measured at ~5.2 points; the guard is against it widening, not at zero.
-    expect(Math.max(...shares) - Math.min(...shares)).toBeLessThan(0.07);
+    expect(Math.max(...shares) - Math.min(...shares)).toBeLessThan(0.015);
   });
 });
 

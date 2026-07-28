@@ -16,6 +16,17 @@ const MAX_USEFUL_STOPS = 8;
 const MAX_STRATEGIC_LINES = 3;
 /** How much the discount on home ground is worth when ranking targets. */
 const HOME_BIAS = 1.35;
+const LARGE_MAP_HOME_BIAS = 1.8;
+
+/** Rotate simultaneous bot planning priority so platform conflicts do not
+ * permanently favour the lowest seat. The order is deterministic from state. */
+export function botDecisionOrder(state: GameState, players: PlayerId[]): PlayerId[] {
+  const ordered = [...players].sort((a, b) => a - b);
+  if (ordered.length < 2) return ordered;
+  const interval = Math.max(1, PARAMS.BOT_DECISION_INTERVAL * PARAMS.TICK_HZ);
+  const offset = (state.seed + Math.floor(state.tick / interval)) % ordered.length;
+  return [...ordered.slice(offset), ...ordered.slice(0, offset)];
+}
 
 /**
  * Deterministic greedy opponent — no RNG anywhere, so a seeded match replays
@@ -116,6 +127,7 @@ interface Pair {
  */
 function rankedTargets(state: GameState, p: PlayerId): Pair[] {
   const home = state.players[p].homeDistrict;
+  const homeBias = state.neighborhoods.length > 18 ? LARGE_MAP_HOME_BIAS : HOME_BIAS;
   const contract = state.civicContract;
   const mandate = state.finalMandate;
   return pressureList(state, p).map((entry) => ({
@@ -123,7 +135,7 @@ function rankedTargets(state: GameState, p: PlayerId): Pair[] {
     j: entry.j,
     value:
       entry.value *
-      (entry.i === home || entry.j === home ? HOME_BIAS : 1) *
+      (entry.i === home || entry.j === home ? homeBias : 1) *
       (contract &&
       (entry.i === contract.originId || entry.j === contract.originId) &&
       (entry.i === contract.destinationId || entry.j === contract.destinationId)

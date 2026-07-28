@@ -1,4 +1,4 @@
-import { decide } from '../src/bot/greedy.ts';
+import { botDecisionOrder, decide } from '../src/bot/greedy.ts';
 import { validate } from '../src/sim/commands.ts';
 import { PARAMS } from '../src/sim/params.ts';
 import { createInitialState, tick } from '../src/sim/state.ts';
@@ -6,7 +6,7 @@ import type { Command, GameState } from '../src/sim/types.ts';
 
 Object.assign(PARAMS, JSON.parse(process.env.P ?? '{}'));
 
-const seeds = (process.env.SEEDS ?? '1,7,42,99,123,777,2024,9001,31415,65537')
+const seeds = (process.env.SEEDS ?? '1,7,42,99,123,777,2024,9001,31415,65537,17,73,404,808,1337,4096,8191,12011,27183,65521')
   .split(',')
   .map(Number)
   .filter(Number.isFinite);
@@ -21,6 +21,8 @@ interface Result {
   firstLineSeconds: number[];
   secondLineSeconds: number[];
   rejectedHumanActions: string[];
+  mapStations: number;
+  mapDistricts: number;
 }
 
 interface ScheduledAction {
@@ -35,7 +37,7 @@ function botCommands(
 ): Command[] {
   const commands: Command[] = [];
   const interval = seconds * PARAMS.TICK_HZ;
-  for (const player of players) {
+  for (const player of botDecisionOrder(state, players)) {
     if (state.tick - state.botLastDecisionTick[player] < interval) continue;
     state.botLastDecisionTick[player] = state.tick;
     commands.push(...decide(state, player));
@@ -64,6 +66,8 @@ function measure(
     firstLineSeconds: first,
     secondLineSeconds: second,
     rejectedHumanActions,
+    mapStations: state.stations.length,
+    mapDistricts: state.neighborhoods.length,
   };
 }
 
@@ -78,7 +82,7 @@ function run(
   const rejectedHumanActions: string[] = [];
   const scripted = mode === 'script' ? humanScript() : [];
 
-  for (let tickIndex = 0; tickIndex < PARAMS.MATCH_SECONDS * PARAMS.TICK_HZ; tickIndex++) {
+  for (let tickIndex = 0; tickIndex < state.matchLengthTicks; tickIndex++) {
     const commands =
       mode === 'bots'
         ? botCommands(state, state.players.map((player) => player.id))
@@ -162,8 +166,8 @@ function print(label: string, results: Result[]): void {
     `${label.padEnd(18)} car ${(average(results, (r) => r.car) * 100).toFixed(1)}%` +
       ` · lines ${average(results, (r) => r.lines).toFixed(1)}` +
       ` · trains ${average(results, (r) => r.trains).toFixed(1)}` +
-      ` · stations ${average(results, (r) => r.stations).toFixed(1)}/36` +
-      ` · districts ${average(results, (r) => r.districts).toFixed(1)}/14` +
+      ` · stations ${average(results, (r) => r.stations).toFixed(1)}/${results[0]?.mapStations ?? 0}` +
+      ` · districts ${average(results, (r) => r.districts).toFixed(1)}/${results[0]?.mapDistricts ?? 0}` +
       ` · 2nd line ${finiteAverage(results, (r) => Math.min(...r.secondLineSeconds)).toFixed(0)}s`,
   );
 }
@@ -173,6 +177,14 @@ const fourBots = seeds.map((seed) => run(seed, 'bots', 4));
 const paced = seeds.map((seed) => run(seed, 'paced'));
 print('BOT VS BOT', bots);
 print('FOUR BOTS', fourBots);
+const seatAverages = [0, 1, 2, 3].map((seat) => average(fourBots, (result) => result.shares[seat]));
+const seatWins = [0, 1, 2, 3].map((seat) =>
+  fourBots.filter((result) => result.shares[seat] === Math.max(...result.shares)).length);
+console.log(
+  `four-seat averages ${seatAverages.map((share) => `${(share * 100).toFixed(2)}%`).join(' / ')}` +
+  ` · wins ${seatWins.join(' / ')}` +
+  ` · spread ${((Math.max(...seatAverages) - Math.min(...seatAverages)) * 100).toFixed(2)} pts`,
+);
 print('PACED VS BOT', paced);
 const pacedWins = paced.filter((result) => result.shares[0] > result.shares[1]).length;
 console.log(`paced planner wins ${pacedWins}/${paced.length} seeds`);

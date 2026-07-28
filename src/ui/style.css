@@ -377,6 +377,20 @@ button.primary {
   cursor: crosshair;
 }
 
+#board.panning {
+  cursor: grabbing;
+}
+
+#fit-map {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 12;
+  padding: 8px 12px;
+  font-size: 10px;
+  pointer-events: auto;
+}
+
 .hud {
   position: absolute;
   pointer-events: none;

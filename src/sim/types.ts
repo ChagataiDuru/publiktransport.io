@@ -12,7 +12,7 @@ export interface Vec2 {
 export interface Station {
   id: Id;
   name: string;
-  pos: Vec2; // 1600x1000 world coordinates
+  pos: Vec2; // active-map world coordinates
   neighborhood: Id;
   platforms: number; // 2 normal, 3-4 hub — shared between all competitors
   isHub: boolean;
@@ -140,6 +140,10 @@ export interface RouteTable {
 export interface GameState {
   tick: number; // 10 Hz
   seed: number;
+  /** Stable identity chosen by the authoritative match creator. */
+  mapId: string;
+  worldWidth: number;
+  worldHeight: number;
   rng: RngState;
   matchLengthTicks: number;
   phase: 'playing' | 'ended';

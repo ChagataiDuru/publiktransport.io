@@ -4,9 +4,10 @@ import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
-import { decide } from '../src/bot/greedy.ts';
+import { botDecisionOrder, decide } from '../src/bot/greedy.ts';
 import { applyCommand, validate } from '../src/sim/commands.ts';
 import { PARAMS } from '../src/sim/params.ts';
+import { defaultMapId, getMap } from '../src/sim/maps.ts';
 import { stringifyNetwork } from '../src/sim/serialize.ts';
 import { createInitialState, tick } from '../src/sim/state.ts';
 import type { Command, GameState } from '../src/sim/types.ts';
@@ -106,10 +107,17 @@ function publicLobby(): LobbyState {
       : null,
   );
   const occupied = seats.filter(Boolean).length;
+  const selectedMap = getMap(defaultMapId(Math.max(2, occupied)));
   const guestsReady = seats.every(
     (seat) => !seat || seat.kind === 'bot' || seat.id === hostSeat || seat.ready,
   );
-  return { phase, seats: publicSeats, canStart: phase === 'lobby' && occupied >= 2 && guestsReady };
+  return {
+    phase,
+    seats: publicSeats,
+    canStart: phase === 'lobby' && occupied >= 2 && guestsReady,
+    mapId: selectedMap.id,
+    mapName: selectedMap.name,
+  };
 }
 
 function broadcast(message: ServerMessage): void {
@@ -161,7 +169,9 @@ function startMatch(requester: Seat): void {
   if (requester.id !== hostSeat || !publicLobby().canStart) return;
   compactSeats();
   const active = seats.filter((seat): seat is Seat => Boolean(seat));
-  game = createInitialState(randomInt(0, 0x7fffffff), active.length);
+  game = createInitialState(randomInt(0, 0x7fffffff), active.length, {
+    mapId: defaultMapId(active.length),
+  });
   phase = 'playing';
   queued = [];
   for (const seat of active) {
@@ -334,7 +344,14 @@ function gameStep(): void {
   }
 
   const interval = PARAMS.BOT_DECISION_INTERVAL * PARAMS.TICK_HZ;
-  for (const seat of seats) {
+  const orderedBots = botDecisionOrder(
+    game,
+    seats
+      .filter((seat): seat is Seat => Boolean(seat) && (seat!.kind === 'bot' || !seat!.connected))
+      .map((seat) => seat.id),
+  );
+  for (const seatId of orderedBots) {
+    const seat = seats[seatId];
     if (!seat || (seat.kind === 'human' && seat.connected)) continue;
     if (game.tick - game.botLastDecisionTick[seat.id] < interval) continue;
     game.botLastDecisionTick[seat.id] = game.tick;

@@ -181,7 +181,7 @@ export function drawLines(
 
       // Halo keeps lines legible where they cross a bright district.
       ctx.strokeStyle = rgb(RGB.ink, 0.75);
-      ctx.lineWidth = (LINE_WIDTH + 5) * view.cam.s;
+      ctx.lineWidth = Math.max(5, Math.min(12, (LINE_WIDTH + 5) * view.cam.s));
       strokePolyline(ctx, view.cam, geo.pts);
 
       // Over-capacity lines pulse red *around* the line, never over it — the
@@ -189,19 +189,19 @@ export function drawLines(
       if (line.loadFactor > 1) {
         const t = 0.3 + 0.4 * (0.5 + 0.5 * Math.sin(view.time * 6));
         ctx.strokeStyle = rgb(RGB.rush, Math.min(0.85, t * Math.min(1.6, line.loadFactor)));
-        ctx.lineWidth = (LINE_WIDTH + 5) * view.cam.s;
+        ctx.lineWidth = Math.max(5, Math.min(12, (LINE_WIDTH + 5) * view.cam.s));
         strokePolyline(ctx, view.cam, geo.pts);
       }
 
       ctx.strokeStyle = line.color;
-      ctx.lineWidth = LINE_WIDTH * view.cam.s;
-      if (line.servicePlan === 'express') ctx.setLineDash([14 * view.cam.s, 4 * view.cam.s]);
+      ctx.lineWidth = Math.max(3.2, Math.min(7.5, LINE_WIDTH * view.cam.s));
+      if (line.servicePlan === 'express') ctx.setLineDash([Math.max(7, 14 * view.cam.s), Math.max(3, 4 * view.cam.s)]);
       strokePolyline(ctx, view.cam, geo.pts);
       ctx.setLineDash([]);
 
       if (line.dispatchEndsAtTick > state.tick) {
         ctx.strokeStyle = rgb(RGB.paper, 0.28 + 0.2 * Math.sin(view.time * 10));
-        ctx.lineWidth = (LINE_WIDTH + 2) * view.cam.s;
+        ctx.lineWidth = Math.max(4, Math.min(9, (LINE_WIDTH + 2) * view.cam.s));
         strokePolyline(ctx, view.cam, geo.pts);
       }
     }

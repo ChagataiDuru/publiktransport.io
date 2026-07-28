@@ -1,4 +1,5 @@
 import { PARAMS, PLAYER_COLORS } from '../sim/params.ts';
+import { getMap } from '../sim/maps.ts';
 import type { GameState } from '../sim/types.ts';
 import { COLORS, PLAYER_RGB, RGB, mix, rgb, toScreen, type ViewState } from './view.ts';
 import { districtFrontline } from '../sim/rivalry.ts';
@@ -170,7 +171,20 @@ export function drawNeighborhoods(
   // station sits on the centroid, drop the label below it so the two names
   // never stack on each other.
   ctx.textAlign = 'center';
+  const landmarks = new Set(getMap(state.mapId).landmarkDistricts ?? []);
+  const strategicIds = new Set<number>();
+  if (state.civicContract) {
+    strategicIds.add(state.civicContract.originId);
+    strategicIds.add(state.civicContract.destinationId);
+  }
+  if (state.finalMandate) {
+    strategicIds.add(state.finalMandate.originId);
+    strategicIds.add(state.finalMandate.destinationId);
+  }
+  const zoomed = view.cam.s / view.cam.fitScale >= 1.35;
   for (const nb of state.neighborhoods) {
+    const isHome = state.players.some((player) => player.homeDistrict === nb.id);
+    if (!zoomed && !landmarks.has(nb.id) && !isHome && !strategicIds.has(nb.id)) continue;
     const c = toScreen(view.cam, nb.centroid);
     let crowded = false;
     for (const st of state.stations) {

@@ -3,12 +3,12 @@ import { assignFlows, updateLoadFactors } from './crowding.ts';
 import { buildOdMatrix, carTime, effectiveDemand } from './demand.ts';
 import { applyEconomy, createLineCost, pushEvent } from './economy.ts';
 import {
-  HOME_SEATS,
   buildDistrictAdjacency,
   buildEdges,
   buildNeighborhoods,
   buildStations,
 } from './map.ts';
+import { defaultMapId, getMap, isMapId, type MapId } from './maps.ts';
 import { logitShares, lerpSplit } from './modechoice.ts';
 import { buildRoutes } from './network.ts';
 import { pushGameEvent } from './events.ts';
@@ -25,7 +25,7 @@ function emptyRoutes(n: number): RouteTable {
   };
 }
 
-function makePlayer(id: PlayerId): Player {
+function makePlayer(id: PlayerId, homeDistrict: Id): Player {
   return {
     id,
     cash: PARAMS.STARTING_CASH,
@@ -36,7 +36,7 @@ function makePlayer(id: PlayerId): Player {
     subsidyRate: 0,
     dispatchReadyAtTick: 0,
     cityShare: 0,
-    homeDistrict: HOME_SEATS[id % HOME_SEATS.length].district,
+    homeDistrict,
   };
 }
 
@@ -46,6 +46,8 @@ export interface InitOptions {
    * assert on a bare map turn this off; the game never does.
    */
   starterLines?: boolean;
+  /** Explicit development/test override. Invalid values safely fall back by player count. */
+  mapId?: MapId | string;
 }
 
 export function createInitialState(
@@ -56,9 +58,11 @@ export function createInitialState(
   if (!Number.isInteger(playerCount) || playerCount < 2 || playerCount > 4) {
     throw new RangeError('playerCount must be an integer from 2 to 4');
   }
-  const stations = buildStations();
-  const neighborhoods = buildNeighborhoods();
-  const edges = buildEdges();
+  const requestedMap = options.mapId;
+  const map = getMap(isMapId(requestedMap) ? requestedMap : defaultMapId(playerCount));
+  const stations = buildStations(map);
+  const neighborhoods = buildNeighborhoods(map);
+  const edges = buildEdges(map);
   const n = neighborhoods.length;
   const emptyShare = (): number[] => [1, ...new Array<number>(playerCount).fill(0)];
   for (const neighborhood of neighborhoods) neighborhood.share = emptyShare();
@@ -66,10 +70,14 @@ export function createInitialState(
   const state: GameState = {
     tick: 0,
     seed,
+    mapId: map.id,
+    worldWidth: map.worldWidth,
+    worldHeight: map.worldHeight,
     rng: createRng(seed),
-    matchLengthTicks: Math.round(PARAMS.MATCH_SECONDS * PARAMS.TICK_HZ),
+    matchLengthTicks: Math.round((map.tuning?.matchSeconds ?? PARAMS.MATCH_SECONDS) * PARAMS.TICK_HZ),
     phase: 'playing',
-    players: Array.from({ length: playerCount }, (_, id) => makePlayer(id)),
+    players: Array.from({ length: playerCount }, (_, id) =>
+      makePlayer(id, map.homeSeats[id % map.homeSeats.length].district)),
     stations,
     neighborhoods,
     edges,
@@ -94,8 +102,11 @@ export function createInitialState(
     districtLeaders: new Array<number>(n).fill(-1),
   };
 
-  balanceOpeningCash(state);
-  if (options.starterLines !== false) grantStarterLines(state);
+  // The classic seats intentionally retain their historical catchment
+  // compensation. Greater Publik City is reflectively balanced in geometry and
+  // starts all four seats equally rather than hiding bias with seat bonuses.
+  if (map.id === 'classic') balanceOpeningCash(state);
+  if (options.starterLines !== false) grantStarterLines(state, map);
   return state;
 }
 
@@ -126,10 +137,10 @@ function balanceOpeningCash(state: GameState): void {
  * the ordinary command path — platform locks, land value and refunds all behave
  * exactly as if the player had built it — the money is simply advanced first.
  */
-function grantStarterLines(state: GameState): void {
+function grantStarterLines(state: GameState, map = getMap(state.mapId)): void {
   for (const player of state.players) {
-    const stations = HOME_SEATS[player.id % HOME_SEATS.length].starter;
-    player.cash += createLineCost(state, player.id, stations);
+    const stations = map.homeSeats[player.id % map.homeSeats.length].starter;
+    player.cash += createLineCost(state, player.id, [...stations]);
     applyCommand(state, { type: 'CreateLine', player: player.id, stations: [...stations] });
   }
   state.events.length = 0;
@@ -332,6 +343,9 @@ export function hashState(state: GameState): string {
   };
 
   num(state.tick);
+  for (let i = 0; i < state.mapId.length; i++) byte(state.mapId.charCodeAt(i));
+  num(state.worldWidth);
+  num(state.worldHeight);
   num(state.rng.s);
   num(state.players.length);
   byte(state.phase === 'ended' ? 1 : 0);

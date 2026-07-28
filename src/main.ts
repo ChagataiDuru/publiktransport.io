@@ -1,9 +1,10 @@
-import { decide } from './bot/greedy.ts';
+import { botDecisionOrder, decide } from './bot/greedy.ts';
 import { createLineBuilder } from './input/linebuilder.ts';
 import { OnlineClient } from './online/client.ts';
 import { createRenderer } from './render/renderer.ts';
 import type { FocusPair, Overlays } from './render/view.ts';
 import { PARAMS, PLAYER_COLORS } from './sim/params.ts';
+import { getMap, isMapId } from './sim/maps.ts';
 import { createInitialState, tick } from './sim/state.ts';
 import type { Command, GameState, PlayerId } from './sim/types.ts';
 import type { LobbyState, PlayerCommand } from './shared/protocol.ts';
@@ -17,9 +18,11 @@ const urlSeed = params.get('seed');
 const speed = Math.max(0.25, Math.min(16, Number(params.get('speed') ?? '1') || 1));
 const botEnabled = params.get('bot') !== 'off';
 const skipSeconds = Math.max(0, Math.min(600, Number(params.get('skip') ?? '0') || 0));
+const mapParam = params.get('map');
+const requestedMap = isMapId(mapParam) ? mapParam : undefined;
 
 let seed = urlSeed !== null ? Number(urlSeed) || 0 : 20260727;
-let state: GameState = createInitialState(seed);
+let state: GameState = createInitialState(seed, 2, { mapId: requestedMap });
 let localPlayer: PlayerId = 0;
 let names = ['You', 'Rival Bot'];
 let botSeats = [1];
@@ -32,6 +35,8 @@ let online: OnlineClient | null = null;
 const canvas = $('board') as HTMLCanvasElement;
 const renderer = createRenderer(canvas);
 const pending: Command[] = [];
+let cameraGesture = false;
+let suppressBuildUntil = 0;
 
 function emit(command: Command): void {
   if (!gameActive || state.phase !== 'playing') return;
@@ -53,6 +58,7 @@ const builder = createLineBuilder(
   () => renderer.camera,
   emit,
   () => localPlayer,
+  () => cameraGesture || performance.now() < suppressBuildUntil,
 );
 const hud = createHud(emit, () => localPlayer);
 hud.setSessionMeta(names, botSeats);
@@ -69,7 +75,9 @@ const endscreen = createEndScreen(
 
 createDevPanel(() => {
   state.netDirty.fill(true);
-  state.matchLengthTicks = Math.round(PARAMS.MATCH_SECONDS * PARAMS.TICK_HZ);
+  state.matchLengthTicks = Math.round(
+    (getMap(state.mapId).tuning?.matchSeconds ?? PARAMS.MATCH_SECONDS) * PARAMS.TICK_HZ,
+  );
 });
 
 const overlays: Overlays = { flow: false, desire: false, districts: false };
@@ -84,7 +92,7 @@ hud.onFocusPair((i, j) => {
 function step(extra: Command[]): void {
   const commands = extra;
   if (botEnabled) {
-    for (const bot of botSeats) {
+    for (const bot of botDecisionOrder(state, botSeats)) {
       const interval = PARAMS.BOT_DECISION_INTERVAL * PARAMS.TICK_HZ;
       if (state.tick - state.botLastDecisionTick[bot] >= interval) {
         state.botLastDecisionTick[bot] = state.tick;
@@ -97,7 +105,8 @@ function step(extra: Command[]): void {
 
 function restart(): void {
   if (urlSeed === null) seed = (seed * 1664525 + 1013904223) >>> 0;
-  state = createInitialState(seed, 2);
+  state = createInitialState(seed, 2, { mapId: requestedMap });
+  renderer.fitMap(state);
   names = [playerName(), 'Rival Bot'];
   botSeats = [1];
   localPlayer = 0;
@@ -125,6 +134,11 @@ window.addEventListener('keydown', (event) => {
     return;
   }
   switch (event.key) {
+    case 'Home':
+    case '0':
+      renderer.fitMap(state);
+      event.preventDefault();
+      break;
     case 'F1':
       overlays.flow = !overlays.flow;
       event.preventDefault();
@@ -150,6 +164,47 @@ window.addEventListener('keydown', (event) => {
 });
 
 let mouse = { x: 0, y: 0, inside: false };
+let spaceHeld = false;
+let panLast = { x: 0, y: 0 };
+window.addEventListener('keydown', (event) => {
+  if (event.code === 'Space' && gameActive) {
+    spaceHeld = true;
+    event.preventDefault();
+  }
+});
+window.addEventListener('keyup', (event) => {
+  if (event.code === 'Space') spaceHeld = false;
+});
+canvas.addEventListener('wheel', (event) => {
+  if (!gameActive) return;
+  const rect = canvas.getBoundingClientRect();
+  renderer.zoomAt(
+    state,
+    event.clientX - rect.left,
+    event.clientY - rect.top,
+    Math.exp(-event.deltaY * 0.0015),
+  );
+  event.preventDefault();
+}, { passive: false });
+canvas.addEventListener('mousedown', (event) => {
+  if (!gameActive || !(event.button === 1 || (event.button === 0 && spaceHeld))) return;
+  cameraGesture = true;
+  panLast = { x: event.clientX, y: event.clientY };
+  canvas.classList.add('panning');
+  event.preventDefault();
+});
+window.addEventListener('mousemove', (event) => {
+  if (!cameraGesture) return;
+  renderer.panBy(state, event.clientX - panLast.x, event.clientY - panLast.y);
+  panLast = { x: event.clientX, y: event.clientY };
+  event.preventDefault();
+});
+window.addEventListener('mouseup', () => {
+  if (!cameraGesture) return;
+  cameraGesture = false;
+  suppressBuildUntil = performance.now() + 120;
+  canvas.classList.remove('panning');
+});
 canvas.addEventListener('mousemove', (event) => {
   const rect = canvas.getBoundingClientRect();
   mouse = { x: event.clientX - rect.left, y: event.clientY - rect.top, inside: true };
@@ -270,6 +325,7 @@ function connectOnline(): void {
       if (newMatch) {
         builder.cancel();
         pending.length = 0;
+        renderer.fitMap(nextState);
       }
       state = nextState;
       localPlayer = playerId;
@@ -346,6 +402,7 @@ function renderLobby(lobby: LobbyState, seat: PlayerId | null): void {
     : mine?.ready
       ? 'Ready. Waiting for the host to start.'
       : 'Ready up when you are prepared to play.';
+  $('lobby-map').textContent = `${lobby.mapName.toUpperCase()} · ${lobby.mapId}`;
 }
 
 function playerName(): string {
@@ -419,6 +476,7 @@ $('copy-invite').addEventListener('click', () => {
   void navigator.clipboard?.writeText(location.origin);
   showToast('Invite URL copied');
 });
+$('fit-map').addEventListener('click', () => renderer.fitMap(state));
 
 const savedName = localStorage.getItem('publiktransport.playerName');
 if (savedName) ($('player-name') as HTMLInputElement).value = savedName;

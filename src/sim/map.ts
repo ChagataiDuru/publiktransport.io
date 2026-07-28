@@ -181,8 +181,32 @@ const EXPRESS_EDGES: [Id, Id][] = [
   [6, 19], [1, 26], [19, 32], [3, 15], [16, 29],
 ];
 
-export function buildStations(): Station[] {
-  return STATION_DEFS.map((d, i) => ({
+export interface MapTuning {
+  matchSeconds?: number;
+  constructionCostMultiplier?: number;
+  demandScale?: number;
+}
+
+export interface MapDefinition {
+  id: string;
+  name: string;
+  description: string;
+  worldWidth: number;
+  worldHeight: number;
+  recommendedMinPlayers: number;
+  recommendedMaxPlayers: number;
+  neighborhoods: readonly NbDef[];
+  stations: readonly StDef[];
+  localEdges: readonly (readonly [Id, Id])[];
+  expressEdges: readonly (readonly [Id, Id])[];
+  homeSeats: readonly { district: Id; starter: readonly [Id, Id] }[];
+  /** Districts whose labels remain visible at fit-map scale. */
+  landmarkDistricts?: readonly Id[];
+  tuning?: MapTuning;
+}
+
+export function buildStations(map: MapDefinition = CLASSIC_MAP): Station[] {
+  return map.stations.map((d, i) => ({
     id: i,
     name: d.name,
     pos: { x: d.x, y: d.y },
@@ -192,8 +216,8 @@ export function buildStations(): Station[] {
   }));
 }
 
-export function buildNeighborhoods(): Neighborhood[] {
-  return NEIGHBORHOOD_DEFS.map((d, i) => ({
+export function buildNeighborhoods(map: MapDefinition = CLASSIC_MAP): Neighborhood[] {
+  return map.neighborhoods.map((d, i) => ({
     id: i,
     name: d.name,
     centroid: polygonCentroid(d.polygon),
@@ -203,10 +227,10 @@ export function buildNeighborhoods(): Neighborhood[] {
   }));
 }
 
-export function buildEdges(): MapEdge[] {
+export function buildEdges(map: MapDefinition = CLASSIC_MAP): MapEdge[] {
   const out: MapEdge[] = [];
-  for (const [a, b] of LOCAL_EDGES) out.push({ a: Math.min(a, b), b: Math.max(a, b), express: false });
-  for (const [a, b] of EXPRESS_EDGES) out.push({ a: Math.min(a, b), b: Math.max(a, b), express: true });
+  for (const [a, b] of map.localEdges) out.push({ a: Math.min(a, b), b: Math.max(a, b), express: false });
+  for (const [a, b] of map.expressEdges) out.push({ a: Math.min(a, b), b: Math.max(a, b), express: true });
   return out;
 }
 
@@ -222,6 +246,22 @@ export const HOME_SEATS: { district: Id; starter: [Id, Id] }[] = [
   { district: 11, starter: [29, 30] }, // Quayside — Quayside / Ferry Steps
   { district: 2, starter: [6, 7] }, // Foundry — Foundry Central / Clocktower
 ];
+
+export const CLASSIC_MAP: MapDefinition = {
+  id: 'classic',
+  name: 'Publik City',
+  description: 'The compact original city, built for close two-player rivalry.',
+  worldWidth: WORLD_W,
+  worldHeight: WORLD_H,
+  recommendedMinPlayers: 2,
+  recommendedMaxPlayers: 3,
+  neighborhoods: NEIGHBORHOOD_DEFS,
+  stations: STATION_DEFS,
+  localEdges: LOCAL_EDGES,
+  expressEdges: EXPRESS_EDGES,
+  homeSeats: HOME_SEATS,
+  landmarkDistricts: [2, 5, 6, 7, 11],
+};
 
 export function edgeKey(a: Id, b: Id): number {
   return a < b ? a * 1000 + b : b * 1000 + a;

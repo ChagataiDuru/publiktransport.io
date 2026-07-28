@@ -6,6 +6,8 @@ export interface Camera {
   s: number;
   ox: number;
   oy: number;
+  /** Scale of a full-map view; zoom limits and label LOD are relative to it. */
+  fitScale: number;
 }
 
 export interface Overlays {
@@ -68,7 +70,59 @@ export function fitCamera(
     s,
     ox: (viewW - worldW * s) / 2,
     oy: (viewH - worldH * s) / 2,
+    fitScale: s,
   };
+}
+
+export function clampCamera(
+  cam: Camera,
+  viewW: number,
+  viewH: number,
+  worldW: number,
+  worldH: number,
+  margin = 50,
+): Camera {
+  const clampAxis = (offset: number, view: number, world: number): number => {
+    const span = world * cam.s;
+    if (span <= view - margin * 2) return (view - span) / 2;
+    return Math.max(view - margin - span, Math.min(margin, offset));
+  };
+  return {
+    ...cam,
+    ox: clampAxis(cam.ox, viewW, worldW),
+    oy: clampAxis(cam.oy, viewH, worldH),
+  };
+}
+
+export function zoomCameraAt(
+  cam: Camera,
+  screen: Vec2,
+  factor: number,
+  viewW: number,
+  viewH: number,
+  worldW: number,
+  worldH: number,
+): Camera {
+  const world = toWorld(cam, screen.x, screen.y);
+  const nextScale = Math.max(cam.fitScale * 0.95, Math.min(cam.fitScale * 3.2, cam.s * factor));
+  return clampCamera({
+    s: nextScale,
+    ox: screen.x - world.x * nextScale,
+    oy: screen.y - world.y * nextScale,
+    fitScale: cam.fitScale,
+  }, viewW, viewH, worldW, worldH);
+}
+
+export function panCamera(
+  cam: Camera,
+  dx: number,
+  dy: number,
+  viewW: number,
+  viewH: number,
+  worldW: number,
+  worldH: number,
+): Camera {
+  return clampCamera({ ...cam, ox: cam.ox + dx, oy: cam.oy + dy }, viewW, viewH, worldW, worldH);
 }
 
 export function toScreen(cam: Camera, p: Vec2): Vec2 {

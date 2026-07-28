@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decide } from '../src/bot/greedy.ts';
+import { botDecisionOrder, decide } from '../src/bot/greedy.ts';
 import { applyCommand } from '../src/sim/commands.ts';
 import { PARAMS } from '../src/sim/params.ts';
 import { parseNetwork, stringifyNetwork } from '../src/sim/serialize.ts';
@@ -9,7 +9,7 @@ function runFourBots(seed: number, ticks: number) {
   let state = createInitialState(seed, 4);
   const interval = PARAMS.BOT_DECISION_INTERVAL * PARAMS.TICK_HZ;
   for (let i = 0; i < ticks; i++) {
-    for (let player = 0; player < state.players.length; player++) {
+    for (const player of botDecisionOrder(state, state.players.map((seat) => seat.id))) {
       if (state.tick - state.botLastDecisionTick[player] < interval) continue;
       state.botLastDecisionTick[player] = state.tick;
       for (const command of decide(state, player)) applyCommand(state, command);

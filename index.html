@@ -54,6 +54,7 @@
           <button id="lobby-start" class="primary">START MATCH</button>
         </div>
         <p id="lobby-help">Guests ready up. The host can add bots and start with 2–4 occupied seats.</p>
+        <p id="lobby-map"></p>
       </div>
     </section>
 
@@ -65,6 +66,7 @@
 
     <main id="stage">
       <canvas id="board"></canvas>
+      <button id="fit-map" aria-label="Fit the whole map">FIT MAP</button>
 
       <div id="hud-clock" class="hud">
         <div class="clock" id="clock">5:00</div>
@@ -97,7 +99,7 @@
       <div id="hud-hint" class="hud">
         <b>Click a station</b> to start a line · click on to extend · <b>Enter</b> confirm ·
         <b>Backspace</b> undo · <b>Esc</b> cancel · <b>F1</b> flows · <b>F2</b> desire ·
-        <b>F3</b> pause · <b>F4</b> districts
+        <b>F3</b> pause · <b>F4</b> districts · wheel zoom · Space/middle drag pan · <b>0</b> fit
       </div>
 
       <div id="tooltip"></div>

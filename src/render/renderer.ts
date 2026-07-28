@@ -1,4 +1,3 @@
-import { WORLD_H, WORLD_W } from '../sim/map.ts';
 import type { GameState, Vec2 } from '../sim/types.ts';
 import { buildCorridorSlots, drawCorridors, drawDraft, drawLines, linePolyline } from './lines.ts';
 import { drawNeighborhoods } from './neighborhoods.ts';
@@ -6,12 +5,15 @@ import { drawDesireOverlay, drawFlowOverlay, drawFocusPair } from './overlay.ts'
 import { buildStationService, drawStations } from './stations.ts';
 import { drawTrains } from './trains.ts';
 import { createEffectsController } from './effects.ts';
-import { COLORS, fitCamera, type Camera, type ViewState } from './view.ts';
+import { COLORS, fitCamera, panCamera, zoomCameraAt, type Camera, type ViewState } from './view.ts';
 
 export interface Renderer {
   canvas: HTMLCanvasElement;
   camera: Camera;
   resize(): void;
+  fitMap(state: GameState): void;
+  zoomAt(state: GameState, x: number, y: number, factor: number): void;
+  panBy(state: GameState, dx: number, dy: number): void;
   draw(state: GameState, view: Omit<ViewState, 'cam'>): void;
 }
 
@@ -25,7 +27,11 @@ function networkSignature(state: GameState): string {
 
 export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   const ctx = canvas.getContext('2d')!;
-  let camera: Camera = { s: 1, ox: 0, oy: 0 };
+  let camera: Camera = { s: 1, ox: 0, oy: 0, fitScale: 1 };
+  let mapId = '';
+  let worldWidth = 1600;
+  let worldHeight = 1000;
+  let manuallyMoved = false;
   let geoSig = '__initial__';
   let geoCache = new Map<number, { pts: Vec2[]; stationAt: number[] }>();
   let displayShare: number[][] = [];
@@ -39,10 +45,46 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     canvas.width = Math.max(1, Math.round(width * dpr));
     canvas.height = Math.max(1, Math.round(height * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    camera = fitCamera(width, height, WORLD_W, WORLD_H);
+    const oldCenter = {
+      x: (width / 2 - camera.ox) / camera.s,
+      y: (height / 2 - camera.oy) / camera.s,
+    };
+    const fitted = fitCamera(width, height, worldWidth, worldHeight);
+    if (!manuallyMoved || !mapId) camera = fitted;
+    else {
+      const ratio = camera.s / camera.fitScale;
+      camera = {
+        s: fitted.s * ratio,
+        fitScale: fitted.s,
+        ox: width / 2 - oldCenter.x * fitted.s * ratio,
+        oy: height / 2 - oldCenter.y * fitted.s * ratio,
+      };
+      camera = panCamera(camera, 0, 0, width, height, worldWidth, worldHeight);
+    }
+  };
+
+  const fitMap = (state: GameState): void => {
+    worldWidth = state.worldWidth;
+    worldHeight = state.worldHeight;
+    mapId = state.mapId;
+    camera = fitCamera(canvas.clientWidth, canvas.clientHeight, worldWidth, worldHeight);
+    manuallyMoved = false;
+  };
+
+  const zoomAt = (state: GameState, x: number, y: number, factor: number): void => {
+    if (state.mapId !== mapId) fitMap(state);
+    camera = zoomCameraAt(camera, { x, y }, factor, canvas.clientWidth, canvas.clientHeight, worldWidth, worldHeight);
+    manuallyMoved = true;
+  };
+
+  const panBy = (state: GameState, dx: number, dy: number): void => {
+    if (state.mapId !== mapId) fitMap(state);
+    camera = panCamera(camera, dx, dy, canvas.clientWidth, canvas.clientHeight, worldWidth, worldHeight);
+    manuallyMoved = true;
   };
 
   const draw = (state: GameState, partial: Omit<ViewState, 'cam'>): void => {
+    if (state.mapId !== mapId) fitMap(state);
     const view: ViewState = { ...partial, cam: camera };
     ctx.fillStyle = COLORS.ink;
     ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
@@ -93,6 +135,9 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       return camera;
     },
     resize,
+    fitMap,
+    zoomAt,
+    panBy,
     draw,
   };
 }
